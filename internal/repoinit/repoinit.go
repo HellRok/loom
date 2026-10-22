@@ -33,7 +33,7 @@ var TrackerDoc = trackerDoc()
 
 func trackerDoc() string {
 	intro, rest, _ := strings.Cut(Conventions, "\n\n")
-	return docTitle + "\n\n" + intro + "\n\n" + docRegistration + "\n\n" + rest
+	return strings.Join([]string{docTitle, intro, docRegistration, rest}, "\n\n")
 }
 
 // TrackerDocPath is the tracker doc's path, relative to the repo root.
