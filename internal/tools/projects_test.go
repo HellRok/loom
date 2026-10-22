@@ -1,0 +1,133 @@
+package tools_test
+
+import (
+	"path/filepath"
+	"reflect"
+	"testing"
+)
+
+func TestCreateProjectInsideGitUsesGitRootAndBasename(t *testing.T) {
+	h := newHarness(t)
+	repo := gitRepo(t, t.TempDir(), "widget")
+	sub := mkdir(t, repo, "cmd", "deep")
+
+	out := h.mustOK(h.call(sub, "create_project", nil))
+
+	if out["slug"] != "widget" || out["root"] != repo {
+		t.Fatalf("got %v, want slug widget root %s", out, repo)
+	}
+}
+
+func TestCreateProjectOutsideGitNeedsSlugAndUsesCwd(t *testing.T) {
+	h := newHarness(t)
+	dir := mkdir(t, t.TempDir(), "notes")
+
+	if r := h.call(dir, "create_project", nil); r.code() != "slug_required" {
+		t.Fatalf("want slug_required, got %v", r)
+	}
+	out := h.mustOK(h.call(dir, "create_project", map[string]any{"slug": "my-notes"}))
+	if out["slug"] != "my-notes" || out["root"] != dir {
+		t.Fatalf("got %v", out)
+	}
+}
+
+func TestCreateProjectWithoutCwd(t *testing.T) {
+	h := newHarness(t)
+	if r := h.call("", "create_project", map[string]any{"slug": "x"}); r.code() != "no_cwd" {
+		t.Fatalf("want no_cwd, got %v", r)
+	}
+}
+
+func TestCreateProjectRejectsInvalidSlug(t *testing.T) {
+	h := newHarness(t)
+	repo := gitRepo(t, t.TempDir(), "My_Repo")
+
+	r := h.call(repo, "create_project", nil)
+	if r.code() != "invalid_slug" || r.Err["suggestion"] != "my-repo" {
+		t.Fatalf("want invalid_slug suggesting my-repo, got %v", r)
+	}
+}
+
+func TestCreateProjectRejectsSlugCollision(t *testing.T) {
+	h := newHarness(t)
+	h.mustOK(h.call(gitRepo(t, t.TempDir(), "app"), "create_project", nil))
+	other := gitRepo(t, t.TempDir(), "app")
+
+	if r := h.call(other, "create_project", nil); r.code() != "slug_taken" {
+		t.Fatalf("want slug_taken, got %v", r)
+	}
+	out := h.mustOK(h.call(other, "create_project", map[string]any{"slug": "app-2"}))
+	if out["root"] != other {
+		t.Fatalf("got %v", out)
+	}
+}
+
+func TestCreateProjectRejectsDuplicateRootButAllowsNesting(t *testing.T) {
+	h := newHarness(t)
+	outer := mkdir(t, t.TempDir(), "outer")
+	h.mustOK(h.call(outer, "create_project", map[string]any{"slug": "outer"}))
+
+	if r := h.call(outer, "create_project", map[string]any{"slug": "again"}); r.code() != "root_taken" {
+		t.Fatalf("want root_taken, got %v", r)
+	}
+	inner := mkdir(t, outer, "inner")
+	out := h.mustOK(h.call(inner, "create_project", map[string]any{"slug": "inner"}))
+	if out["root"] != inner {
+		t.Fatalf("got %v", out)
+	}
+}
+
+func TestCreateProjectFromLinkedWorktreeUsesMainWorktreeRoot(t *testing.T) {
+	h := newHarness(t)
+	repo := gitRepo(t, t.TempDir(), "main-repo")
+	wt := filepath.Join(t.TempDir(), "elsewhere")
+	git(t, repo, "worktree", "add", "-q", wt)
+
+	out := h.mustOK(h.call(resolved(t, wt), "create_project", nil))
+	if out["slug"] != "main-repo" || out["root"] != repo {
+		t.Fatalf("got %v, want main-repo at %s", out, repo)
+	}
+}
+
+func TestListProjects(t *testing.T) {
+	h := newHarness(t)
+	if out := h.mustOK(h.call("", "list_projects", nil)); len(out["projects"].([]any)) != 0 {
+		t.Fatalf("want no projects, got %v", out)
+	}
+	a := mkdir(t, t.TempDir(), "a")
+	b := mkdir(t, t.TempDir(), "b")
+	h.mustOK(h.call(b, "create_project", map[string]any{"slug": "bee"}))
+	h.mustOK(h.call(a, "create_project", map[string]any{"slug": "ay"}))
+
+	out := h.mustOK(h.call("", "list_projects", nil))
+	want := []any{
+		map[string]any{"slug": "ay", "root": a},
+		map[string]any{"slug": "bee", "root": b},
+	}
+	if !reflect.DeepEqual(out["projects"], want) {
+		t.Fatalf("got %v, want %v", out["projects"], want)
+	}
+}
+
+func TestDeleteProject(t *testing.T) {
+	h := newHarness(t)
+	dir := mkdir(t, t.TempDir(), "doomed")
+	h.mustOK(h.call(dir, "create_project", map[string]any{"slug": "doomed"}))
+
+	if r := h.call("", "delete_project", map[string]any{"slug": "doomed", "confirm": "nope"}); r.code() != "confirm_mismatch" {
+		t.Fatalf("want confirm_mismatch, got %v", r)
+	}
+	r := h.call("", "delete_project", map[string]any{"slug": "ghost", "confirm": "ghost"})
+	if r.code() != "unknown_project" || len(r.Err["projects"].([]any)) != 1 {
+		t.Fatalf("want unknown_project listing projects, got %v", r)
+	}
+	if r := h.call(dir, "delete_project", map[string]any{"slug": "", "confirm": ""}); r.code() != "unknown_project" {
+		t.Fatalf("empty slug: want unknown_project, got %v", r)
+	}
+	out := h.mustOK(h.call("", "delete_project", map[string]any{"slug": "doomed", "confirm": "doomed"}))
+	if out["deleted"] != "doomed" {
+		t.Fatalf("got %v", out)
+	}
+	// The Slug and Root are free again.
+	h.mustOK(h.call(dir, "create_project", map[string]any{"slug": "doomed"}))
+}

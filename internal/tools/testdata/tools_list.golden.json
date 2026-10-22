@@ -1,0 +1,131 @@
+[
+  {
+    "description": "Register a Project: inside git, the main worktree's root with its folder name as the Slug; outside git, the cwd with the `slug` you pass.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "slug": {
+          "description": "Defaults to the git root's folder name; required outside git. Lowercase letters, digits and hyphens.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "create_project",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "root"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Hard-delete a Project and everything in it, freeing its Slug and Root.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Must equal slug",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "slug": {
+          "description": "The Project to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "confirm"
+      ],
+      "type": "object"
+    },
+    "name": "delete_project",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "deleted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deleted"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "All Projects with their Roots.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_projects",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "root": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "slug",
+              "root"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "projects"
+      ],
+      "type": "object"
+    }
+  }
+]
