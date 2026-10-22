@@ -2,7 +2,9 @@ package main_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	_ "modernc.org/sqlite"
 )
 
 // loomBin is the binary under test, built once by TestMain.
@@ -182,5 +185,57 @@ func TestRacingShimsEndUpWithOneDaemon(t *testing.T) {
 	}
 	if _, err := in.healthz(); err == nil {
 		t.Fatal("a second daemon is still answering")
+	}
+}
+
+// A daemon that can't bring the database up to date exits non-zero, says why
+// in its log, and never serves.
+func TestServeExitsWhenTheDatabaseCannotBeUsed(t *testing.T) {
+	snaps, err := filepath.Glob("internal/store/testdata/snapshots/*.db")
+	if err != nil || len(snaps) == 0 {
+		t.Fatalf("no snapshots (err %v)", err)
+	}
+	cases := map[string]struct {
+		damage string // run against the copied snapshot
+		want   string // in the daemon's log
+	}{
+		"newer than the binary": {"INSERT INTO goose_db_version (version_id, is_applied) VALUES (9999, 1)", "9999"},
+		"failed migration":      {"DELETE FROM goose_db_version WHERE version_id = (SELECT MAX(version_id) FROM goose_db_version)", "migrat"},
+	}
+	for name, c := range cases {
+		for _, snap := range snaps {
+			t.Run(name+"/"+filepath.Base(snap), func(t *testing.T) {
+				in := newInstall(t)
+				b, err := os.ReadFile(snap)
+				if err != nil {
+					t.Fatal(err)
+				}
+				dbPath := filepath.Join(in.home, "loom.db")
+				if err := os.WriteFile(dbPath, b, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				db, err := sql.Open("sqlite", "file:"+dbPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = db.Exec(c.damage)
+				db.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				out, err := in.command("serve").CombinedOutput()
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() == 0 {
+					t.Fatalf("loom serve should exit non-zero, got %v\n%s", err, out)
+				}
+				if !strings.Contains(string(out), c.want) {
+					t.Errorf("log should mention %q:\n%s", c.want, out)
+				}
+				if _, err := in.healthz(); err == nil {
+					t.Error("daemon answered /healthz despite the database failure")
+				}
+			})
+		}
 	}
 }

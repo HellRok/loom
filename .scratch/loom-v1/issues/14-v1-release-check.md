@@ -6,9 +6,9 @@ Spec: [Loom v1](../../loom/spec.md)
 
 **Blocked by:** 01–13
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A v1 snapshot DB is committed under `testdata/`
-- [ ] Tests open each snapshot with the current binary's migration path, refuse a DB newer than the binary, and exit on a failed migration
-- [ ] `go test ./...` passes on Linux and macOS
-- [ ] The skill replay tests (08) pass against the final tool surface
+- [x] A v1 snapshot DB is committed under `testdata/`
+- [x] Tests open each snapshot with the current binary's migration path, refuse a DB newer than the binary, and exit on a failed migration
+- [x] `go test ./...` passes on Linux and macOS
+- [x] The skill replay tests (08) pass against the final tool surface
