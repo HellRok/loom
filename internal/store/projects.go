@@ -33,7 +33,15 @@ func (s *Store) CreateProject(ctx context.Context, slug, root string) (Project, 
 	case rootTaken:
 		return Project{}, ErrRootTaken
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO projects (slug, root, created_at) VALUES (?, ?, ?)`, slug, root, now()); err != nil {
+	res, err := tx.ExecContext(ctx, `INSERT INTO projects (slug, root, created_at) VALUES (?, ?, ?)`, slug, root, now())
+	if err != nil {
+		return Project{}, fmt.Errorf("creating project %q: %w", slug, err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Project{}, fmt.Errorf("creating project %q: %w", slug, err)
+	}
+	if err := seedLabels(ctx, tx, id); err != nil {
 		return Project{}, fmt.Errorf("creating project %q: %w", slug, err)
 	}
 	if err := tx.Commit(); err != nil {

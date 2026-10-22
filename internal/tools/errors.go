@@ -25,6 +25,8 @@ const (
 	codeInvalidArgument Code = "invalid_argument"
 	codeVersionConflict Code = "version_conflict"
 	codeNoSection       Code = "no_section"
+	codeUndefinedLabel  Code = "undefined_label"
+	codeLabelInUse      Code = "label_in_use"
 	codeInternal        Code = "internal"
 )
 

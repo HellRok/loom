@@ -70,6 +70,10 @@
         "session": {
           "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
           "type": "string"
+        },
+        "wontfix": {
+          "description": "Also apply the wontfix label, in the same step",
+          "type": "boolean"
         }
       },
       "required": [
@@ -162,6 +166,16 @@
           "description": "issue (the default) or map; fixed once created",
           "type": "string"
         },
+        "labels": {
+          "description": "Labels to apply, all defined in the Project (see list_labels)",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "project": {
           "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
           "type": "string"
@@ -205,6 +219,61 @@
         "title",
         "kind",
         "version"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Define a label in the Project. Creating one that exists changes nothing and returns already: true. Labels can't be renamed.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "create_label",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "already": {
+          "type": "boolean"
+        },
+        "colour": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "colour",
+        "count",
+        "already"
       ],
       "type": "object"
     }
@@ -276,6 +345,42 @@
       "type": "object"
     },
     "name": "delete_issue",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "deleted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deleted"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Delete a label no Issue carries. If Issues carry it, the error lists them.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "delete_label",
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -392,6 +497,74 @@
     }
   },
   {
+    "description": "Add and/or remove labels on an Issue as one atomic step. Every label must be defined in the Project, else nothing changes and the error lists the valid ones.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "add": {
+          "description": "Labels to apply",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "remove": {
+          "description": "Labels to remove",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "label",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "description": "The Issue's labels after the change",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "labels"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "List a Project's Issues, oldest first, with the total matching. Filters combine with AND.",
     "inputSchema": {
       "additionalProperties": false,
@@ -408,9 +581,23 @@
           "description": "issue or map; both by default",
           "type": "string"
         },
+        "labels": {
+          "description": "Only Issues carrying all of these labels",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "limit": {
           "description": "At most this many Issues (default 50)",
           "type": "integer"
+        },
+        "no_labels": {
+          "description": "Only Issues with no labels",
+          "type": "boolean"
         },
         "project": {
           "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
@@ -484,6 +671,15 @@
               "kind": {
                 "type": "string"
               },
+              "labels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "ref": {
                 "type": "string"
               },
@@ -499,7 +695,8 @@
               "title",
               "kind",
               "state",
-              "assignee"
+              "assignee",
+              "labels"
             ],
             "type": "object"
           },
@@ -515,6 +712,63 @@
       "required": [
         "total",
         "issues"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "The Project's labels with their colour and how many Issues carry each.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_labels",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "colour": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "description": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "description",
+              "colour",
+              "count"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "labels"
       ],
       "type": "object"
     }
@@ -737,6 +991,15 @@
         "kind": {
           "type": "string"
         },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "project": {
           "type": "string"
         },
@@ -771,6 +1034,7 @@
         "created_at",
         "updated_at",
         "version",
+        "labels",
         "body"
       ],
       "type": "object"

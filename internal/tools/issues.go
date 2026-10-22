@@ -34,6 +34,11 @@ func issueError(slug string, n int64, err error) error {
 			fmt.Sprintf("#%d changed since you read it; it is now at version %d. Re-apply your change to the current title and body and retry with version %d.", n, cur.Version, cur.Version),
 			map[string]any{"current": map[string]any{"version": cur.Version, "title": cur.Title, "body": cur.Body}})
 	}
+	if undefined, ok := errors.AsType[*store.UndefinedLabelError](err); ok {
+		return fail(codeUndefinedLabel,
+			fmt.Sprintf("%q isn't a label in this Project. Use one of the valid labels, or define it first with create_label.", undefined.Name),
+			map[string]any{"valid": undefined.Valid})
+	}
 	if missing, ok := errors.AsType[*store.NoSectionError](err); ok {
 		return fail(codeNoSection, fmt.Sprintf("#%d has no section with that heading.", n),
 			map[string]any{"headings": missing.Headings})
@@ -86,6 +91,8 @@ type createIssueIn struct {
 	Title string `json:"title"`
 	Body  string `json:"body,omitempty" jsonschema:"Markdown"`
 	Kind  string `json:"kind,omitempty" jsonschema:"issue (the default) or map; fixed once created"`
+	// Labels must all be defined in the Project.
+	Labels []string `json:"labels,omitempty" jsonschema:"Labels to apply, all defined in the Project (see list_labels)"`
 }
 
 type createIssueOut struct {
@@ -111,12 +118,12 @@ func (h *handlers) createIssue(ctx context.Context, c call, in createIssueIn) (c
 	if kind != store.KindIssue && kind != store.KindMap {
 		return createIssueOut{}, fail(codeInvalidArgument, fmt.Sprintf("`kind` must be %q or %q, not %q.", store.KindIssue, store.KindMap, kind), nil)
 	}
-	i, err := h.store.CreateIssue(ctx, p.Slug, h.actor(c), kind, in.Title, in.Body)
+	i, err := h.store.CreateIssue(ctx, p.Slug, h.actor(c), kind, in.Title, in.Body, in.Labels)
 	if errors.Is(err, store.ErrNotFound) {
 		return createIssueOut{}, h.unknownProject(ctx, p.Slug)
 	}
 	if err != nil {
-		return createIssueOut{}, err
+		return createIssueOut{}, issueError(p.Slug, 0, err)
 	}
 	return createIssueOut{Ref: refString(i.Number), URL: h.issueURL(p.Slug, i.Number), Title: i.Title, Kind: i.Kind, Version: i.Version}, nil
 }
@@ -140,6 +147,7 @@ type viewIssueOut struct {
 	CreatedAt string        `json:"created_at"`
 	UpdatedAt string        `json:"updated_at"`
 	Version   int64         `json:"version"`
+	Labels    []string      `json:"labels"`
 	Body      string        `json:"body"`
 	Comments  *[]commentOut `json:"comments,omitempty"`
 	Events    *[]eventOut   `json:"events,omitempty"`
@@ -154,6 +162,9 @@ func (h *handlers) viewIssue(ctx context.Context, c call, in viewIssueIn) (viewI
 		Ref: refString(i.Number), URL: h.issueURL(p.Slug, i.Number), Project: p.Slug,
 		Kind: i.Kind, Title: i.Title, State: i.State, Assignee: nullable(i.Assignee), Author: i.Author,
 		CreatedAt: timestamp(i.CreatedAt), UpdatedAt: timestamp(i.UpdatedAt), Version: i.Version, Body: i.Body,
+	}
+	if out.Labels, err = h.store.IssueLabels(ctx, p.Slug, i.Number); err != nil {
+		return viewIssueOut{}, err
 	}
 	if in.Comments == nil || *in.Comments {
 		if out.Comments, err = h.comments(ctx, p.Slug, i.Number); err != nil {
@@ -261,6 +272,7 @@ type closeIn struct {
 	Common
 	Ref     string `json:"ref" jsonschema:"The Issue: #N, N, slug#N or its URL"`
 	Comment string `json:"comment,omitempty" jsonschema:"Markdown comment posted in the same step, e.g. the resolution"`
+	Wontfix bool   `json:"wontfix,omitempty" jsonschema:"Also apply the wontfix label, in the same step"`
 }
 
 func (h *handlers) closeIssue(ctx context.Context, c call, in closeIn) (stateOut, error) {
@@ -272,7 +284,7 @@ func (h *handlers) closeIssue(ctx context.Context, c call, in closeIn) (stateOut
 	if strings.TrimSpace(comment) == "" {
 		comment = ""
 	}
-	i, already, err := h.store.CloseIssue(ctx, p.Slug, n, comment, h.actor(c))
+	i, already, err := h.store.CloseIssue(ctx, p.Slug, n, comment, in.Wontfix, h.actor(c))
 	if err != nil {
 		return stateOut{}, issueError(p.Slug, n, err)
 	}
@@ -303,6 +315,9 @@ type listIssuesIn struct {
 	Assignee string `json:"assignee,omitempty" jsonschema:"none, any, or an assignee's name"`
 	Detail   string `json:"detail,omitempty" jsonschema:"summary (the default), or full to include bodies and comments"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"At most this many Issues (default 50)"`
+	// Labels are all required.
+	Labels   []string `json:"labels,omitempty" jsonschema:"Only Issues carrying all of these labels"`
+	NoLabels bool     `json:"no_labels,omitempty" jsonschema:"Only Issues with no labels"`
 }
 
 // issueSummary is an Issue in a list: bodies and comments only with
@@ -313,6 +328,7 @@ type issueSummary struct {
 	Kind     string        `json:"kind"`
 	State    string        `json:"state"`
 	Assignee *string       `json:"assignee"`
+	Labels   []string      `json:"labels"`
 	Body     *string       `json:"body,omitempty"`
 	Comments *[]commentOut `json:"comments,omitempty"`
 }
@@ -329,7 +345,16 @@ func (h *handlers) listIssues(ctx context.Context, c call, in listIssuesIn) (lis
 	if err != nil {
 		return listIssuesOut{}, err
 	}
-	f := store.IssueFilter{Kind: in.Kind, Assignee: in.Assignee, Limit: in.Limit}
+	f := store.IssueFilter{Kind: in.Kind, Assignee: in.Assignee, Limit: in.Limit, Labels: in.Labels, NoLabels: in.NoLabels}
+	if f.NoLabels && len(f.Labels) > 0 {
+		return listIssuesOut{}, fail(codeInvalidArgument, "`labels` and `no_labels` can't both be set: no Issue matches.", nil)
+	}
+	if len(f.Labels) > 0 {
+		// A typo'd label would silently match nothing, so check it exists.
+		if err := h.checkLabels(ctx, p.Slug, f.Labels); err != nil {
+			return listIssuesOut{}, err
+		}
+	}
 	switch in.State {
 	case "":
 		f.State = store.StateOpen
@@ -364,6 +389,9 @@ func (h *handlers) listIssues(ctx context.Context, c call, in listIssuesIn) (lis
 	out := listIssuesOut{Total: total, Issues: make([]issueSummary, len(is))}
 	for k, i := range is {
 		s := issueSummary{Ref: refString(i.Number), Title: i.Title, Kind: i.Kind, State: i.State, Assignee: nullable(i.Assignee)}
+		if s.Labels, err = h.store.IssueLabels(ctx, p.Slug, i.Number); err != nil {
+			return listIssuesOut{}, err
+		}
 		if full {
 			s.Body = &i.Body
 			if s.Comments, err = h.comments(ctx, p.Slug, i.Number); err != nil {

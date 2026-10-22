@@ -68,6 +68,8 @@ const (
 	EventCommented   = "commented"
 	EventClosed      = "closed"
 	EventReopened    = "reopened"
+	EventLabelled    = "labelled"
+	EventUnlabelled  = "unlabelled"
 )
 
 // VersionConflictError reports an edit based on a stale version.
@@ -100,6 +102,9 @@ type IssueFilter struct {
 	Kind  string
 	// Assignee is AssigneeNone, AssigneeAny or a name.
 	Assignee string
+	// Labels are all required; NoLabels selects Issues with none.
+	Labels   []string
+	NoLabels bool
 	Limit    int
 }
 
@@ -186,7 +191,10 @@ func (s *Store) mutate(ctx context.Context, slug string, n int64, what string, f
 }
 
 // CreateIssue adds an open Issue to the Project slug with the next number.
-func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, kind, title, body string) (Issue, error) {
+//
+// Each of labels is applied in the same transaction; an undefined one is an
+// *UndefinedLabelError and no Issue is created.
+func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, kind, title, body string, labels []string) (Issue, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
@@ -215,6 +223,12 @@ func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, kind, tit
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
 	}
 	if err := addEvent(ctx, tx, id, a, t, EventCreated, nil); err != nil {
+		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
+	}
+	if err := applyLabels(ctx, tx, projectID, id, labels, nil, a, t); err != nil {
+		if _, ok := errors.AsType[*UndefinedLabelError](err); ok {
+			return Issue{}, err
+		}
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
 	}
 	_, i, err := issue(ctx, tx, slug, n)
@@ -255,6 +269,14 @@ func (s *Store) Issues(ctx context.Context, slug string, f IssueFilter) ([]Issue
 	default:
 		where = append(where, "i.assignee = ?")
 		args = append(args, f.Assignee)
+	}
+	if f.NoLabels {
+		where = append(where, "NOT EXISTS (SELECT 1 FROM issue_labels il WHERE il.issue_id = i.id)")
+	}
+	for _, name := range f.Labels {
+		where = append(where, `EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id
+			WHERE il.issue_id = i.id AND l.name = ?)`)
+		args = append(args, name)
 	}
 	from := ` FROM issues i JOIN projects p ON p.id = i.project_id WHERE ` + strings.Join(where, " AND ")
 
@@ -435,16 +457,25 @@ func touch(ctx context.Context, tx *sql.Tx, issueID int64, at string) error {
 	return err
 }
 
-// CloseIssue closes Issue n, first posting comment if it isn't empty.
-// Closing a closed Issue changes nothing, comment included, and reports
-// already.
-func (s *Store) CloseIssue(ctx context.Context, slug string, n int64, comment string, a Actor) (i Issue, already bool, err error) {
+// CloseIssue closes Issue n, first posting comment if it isn't empty and,
+// with wontfix, applying the wontfix Label. Closing a closed Issue changes
+// nothing, comment and Label included, and reports already.
+func (s *Store) CloseIssue(ctx context.Context, slug string, n int64, comment string, wontfix bool, a Actor) (i Issue, already bool, err error) {
 	i, err = s.mutate(ctx, slug, n, "closing", func(tx *sql.Tx, id int64, i Issue) error {
 		if i.State == StateClosed {
 			already = true
 			return nil
 		}
 		t := now()
+		if wontfix {
+			pid, err := projectID(ctx, tx, slug)
+			if err != nil {
+				return err
+			}
+			if err := applyLabels(ctx, tx, pid, id, []string{LabelWontfix}, nil, a, t); err != nil {
+				return err
+			}
+		}
 		if comment != "" {
 			if _, err := addComment(ctx, tx, id, comment, a, t); err != nil {
 				return err

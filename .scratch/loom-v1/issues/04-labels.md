@@ -6,13 +6,13 @@ Spec: [Loom v1](../../loom/spec.md)
 
 **Blocked by:** 03 (Issue lifecycle)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] New Projects are seeded with `bug`, `enhancement`, `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling` and `wayfinder:task`
-- [ ] Labels have a name unique per Project, an optional description and a colour from a fixed pool; no rename
-- [ ] `label {ref, add, remove}` is one atomic transition with labelled/unlabelled Events; `labels` on `create_issue`
-- [ ] Applying an undefined label → `undefined_label {valid}`
-- [ ] `list_labels` with usage counts; `create_label` is idempotent; `delete_label` works only when the label is unused, otherwise the error lists the Issues using it
-- [ ] `list_issues` gains `labels` (all-of) and `no_labels`
-- [ ] `close {ref, comment, wontfix: true}` applies `wontfix`, comments and closes atomically
-- [ ] Handler-seam tests for the above
+- [x] New Projects are seeded with `bug`, `enhancement`, `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling` and `wayfinder:task`
+- [x] Labels have a name unique per Project, an optional description and a colour from a fixed pool; no rename
+- [x] `label {ref, add, remove}` is one atomic transition with labelled/unlabelled Events; `labels` on `create_issue`
+- [x] Applying an undefined label → `undefined_label {valid}`
+- [x] `list_labels` with usage counts; `create_label` is idempotent; `delete_label` works only when the label is unused, otherwise the error lists the Issues using it
+- [x] `list_issues` gains `labels` (all-of) and `no_labels`
+- [x] `close {ref, comment, wontfix: true}` applies `wontfix`, comments and closes atomically
+- [x] Handler-seam tests for the above

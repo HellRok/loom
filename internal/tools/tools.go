@@ -96,6 +96,23 @@ func NewServer(d Deps) *mcp.Server {
 		Name:        "delete_issue",
 		Description: "Hard-delete an Issue with its comments and history. Its #N is never reused.",
 	}, h.deleteIssue)
+
+	add(s, h, &mcp.Tool{
+		Name:        "label",
+		Description: "Add and/or remove labels on an Issue as one atomic step. Every label must be defined in the Project, else nothing changes and the error lists the valid ones.",
+	}, h.label)
+	add(s, h, &mcp.Tool{
+		Name:        "list_labels",
+		Description: "The Project's labels with their colour and how many Issues carry each.",
+	}, h.listLabels)
+	add(s, h, &mcp.Tool{
+		Name:        "create_label",
+		Description: "Define a label in the Project. Creating one that exists changes nothing and returns already: true. Labels can't be renamed.",
+	}, h.createLabel)
+	add(s, h, &mcp.Tool{
+		Name:        "delete_label",
+		Description: "Delete a label no Issue carries. If Issues carry it, the error lists them.",
+	}, h.deleteLabel)
 	return s
 }
 
