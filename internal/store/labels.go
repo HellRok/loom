@@ -252,6 +252,9 @@ func (s *Store) CreateLabel(ctx context.Context, slug, name, description string)
 	if err := tx.Commit(); err != nil {
 		return Label{}, false, fmt.Errorf("creating label %q in %s: %w", name, slug, err)
 	}
+	if !already {
+		s.notify(slug)
+	}
 	ls, err := s.Labels(ctx, slug)
 	if err != nil {
 		return Label{}, false, err
@@ -312,5 +315,6 @@ func (s *Store) DeleteLabel(ctx context.Context, slug, name string) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("deleting label %q in %s: %w", name, slug, err)
 	}
+	s.notify(slug)
 	return nil
 }

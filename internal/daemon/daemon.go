@@ -80,7 +80,11 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	srv := &http.Server{Handler: Handler(o, st), ReadHeaderTimeout: 10 * time.Second}
+	handler, closeStreams := newHandler(o, st)
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	// Shutdown waits for open requests, and an event stream never ends on
+	// its own.
+	srv.RegisterOnShutdown(closeStreams)
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 	o.logger().Info("listening", "addr", addr)
@@ -128,6 +132,12 @@ func acquireLock(path string) (*os.File, error) {
 
 // Handler is the daemon's HTTP surface, behind the Host check.
 func Handler(o Options, st *store.Store) http.Handler {
+	h, _ := newHandler(o, st)
+	return h
+}
+
+// newHandler is Handler, with the function that ends the open event streams.
+func newHandler(o Options, st *store.Store) (http.Handler, func()) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -146,8 +156,8 @@ func Handler(o Options, st *store.Store) http.Handler {
 		func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: o.logger()},
 	))
-	web.Register(mux, web.Deps{Store: st, Logger: o.logger()})
-	return hostCheck(o.Config.Port, mux)
+	closeStreams := web.Register(mux, web.Deps{Store: st, Logger: o.logger()})
+	return hostCheck(o.Config.Port, mux), closeStreams
 }
 
 // hostCheck rejects requests not addressed to 127.0.0.1:<port> or
