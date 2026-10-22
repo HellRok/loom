@@ -11,8 +11,9 @@
 <script src="/static/loom.js" defer></script>
 </head>
 <body>
-<header class="top"><a href="/" hx-get="/" hx-target="#main" hx-push-url="true" class="brand">Loom</a></header>
+<header class="top"><a href="/" hx-get="/" hx-target="#main" hx-push-url="true" class="brand">Loom</a> <a href="/sessions" hx-get="/sessions" hx-target="#main" hx-push-url="true" class="top-link">Sessions</a></header>
 <main id="main">{{template "main" .}}</main>
 </body>
 </html>
 {{end}}
+{{define "holder"}}<span class="holder"><a class="session-link" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true" title="{{.ID}}">{{.Short}}</a> <span class="idle">{{.Idle}}</span></span>{{end}}

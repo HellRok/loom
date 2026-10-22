@@ -72,3 +72,14 @@ progress { width: 10rem; vertical-align: middle; }
   .panes { display: block; }
   .panes > * { border-right: 0; border-bottom: 1px solid var(--line); }
 }
+
+.top-link { margin-left: 1rem; }
+.holder .idle, .held-by { color: var(--muted); font-size: 0.85em; }
+.row .held-by { margin: 0 0 0.2rem 0.25rem; }
+.session-link { font-family: ui-monospace, monospace; }
+.sessions, .session { max-width: 52rem; margin: 0 auto; padding: 1rem; }
+.session-list { border-collapse: collapse; width: 100%; }
+.session-list th, .session-list td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--line); }
+.held, .events { list-style: none; padding: 0; }
+.held li, .events li { padding: 0.2rem 0; border-bottom: 1px solid var(--line); }
+.slug, .events .type { color: var(--muted); }
