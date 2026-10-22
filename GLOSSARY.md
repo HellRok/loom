@@ -53,7 +53,7 @@ An Issue that must be closed before another Issue it blocks can be taken.
 _Avoid_: Dependency, prerequisite
 
 **Frontier**:
-The open, unblocked, unclaimed children of an Issue, in creation order.
+The open, unblocked, unclaimed Issues among a set, in creation order: either the children of an Issue, or a whole Project's Issues other than its Maps. Whether an Issue is tagged `ready-for-agent` plays no part; a tag is a claim about readiness, the Frontier is the fact.
 _Avoid_: Ready queue, backlog
 
 **Claim**:
