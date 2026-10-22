@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Loom MCP tool surface</title>
+<style>
+  :root { --fg:#1d1d1f; --mute:#6b6b70; --line:#e3e3e8; --bg:#fafafa; --card:#fff; --accent:#4b5bdc; --err:#c0392b; --ok:#2e7d32; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system, system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  header { padding:20px 28px; border-bottom:1px solid var(--line); background:var(--card); }
+  header h1 { margin:0 0 4px; font-size:20px; }
+  header p { margin:4px 0; color:var(--mute); max-width:980px; }
+  .badge { display:inline-block; font-size:11px; padding:1px 6px; border-radius:4px; background:#fde8e8; color:var(--err); font-weight:600; vertical-align:middle; }
+  main { display:grid; grid-template-columns: 340px 1fr 1fr; gap:16px; padding:16px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; min-width:0; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); margin:0 0 10px; }
+  h3 { font-size:14px; margin:14px 0 6px; }
+  code, pre, textarea, select, input { font:12px/1.45 ui-monospace, Menlo, monospace; }
+  pre { background:#f4f4f7; padding:8px; border-radius:6px; overflow:auto; margin:4px 0; white-space:pre-wrap; word-break:break-word; }
+  .tool { border-top:1px solid var(--line); padding:8px 0; }
+  .tool .name { font-weight:600; font-family:ui-monospace, Menlo, monospace; color:var(--accent); cursor:pointer; }
+  .tool .sum { color:var(--mute); font-size:12px; }
+  .tool table { font-size:11.5px; border-collapse:collapse; margin-top:4px; width:100%; }
+  .tool td { padding:1px 4px; vertical-align:top; }
+  .tool td:first-child { font-family:ui-monospace, Menlo, monospace; white-space:nowrap; }
+  .req { color:var(--err); }
+  .group { font-weight:600; margin-top:12px; font-size:12px; color:var(--mute); text-transform:uppercase; }
+  button { font:inherit; font-size:12.5px; padding:5px 10px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:default; }
+  .tabs { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
+  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .steps { display:flex; flex-direction:column; gap:6px; }
+  .step { display:flex; gap:8px; align-items:flex-start; }
+  .step button { text-align:left; flex:1; }
+  .step .who { font-weight:700; width:22px; padding-top:5px; }
+  .who-A { color:#4b5bdc; } .who-B { color:#b85c00; }
+  .step.done button { background:#eef7ee; }
+  .step .note { font-size:12px; color:var(--mute); }
+  .row { display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap:wrap; }
+  textarea { width:100%; min-height:110px; border:1px solid var(--line); border-radius:6px; padding:6px; }
+  .log-entry { border-top:1px solid var(--line); padding:8px 0; }
+  .log-entry .call { font-family:ui-monospace, Menlo, monospace; font-size:12px; }
+  .log-entry.error pre.res { background:#fdf0ef; color:var(--err); }
+  .log-entry.setup { opacity:.55; }
+  table.state { width:100%; border-collapse:collapse; font-size:12px; }
+  table.state th, table.state td { text-align:left; padding:4px 6px; border-top:1px solid var(--line); vertical-align:top; }
+  table.state th { color:var(--mute); font-weight:500; }
+  .lab { display:inline-block; padding:0 5px; margin:1px; border-radius:4px; font-size:11px; background:#eef0fb; }
+  .closed { color:var(--mute); text-decoration:line-through; }
+  .changed { background:#fff6d6; }
+  .desc { color:var(--mute); margin:0 0 10px; }
+  .open-q { background:#fff8e1; border:1px solid #f1d98a; padding:8px 10px; border-radius:6px; font-size:12.5px; margin:8px 0; }
+  details summary { cursor:pointer; color:var(--mute); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Loom MCP tool surface <span class="badge">PROTOTYPE · throwaway</span></h1>
+  <p><b>Question:</b> what tools should the Loom daemon expose over MCP (names, arguments, outputs, errors)? Proposed here: <b>granular verbs</b> mirroring the tracker-doc operations (create, view, list, comment, label, close, claim…) plus a few <b>domain tools</b> where the skills need atomicity (<code>frontier</code>, <code>claim</code>, <code>append_to_section</code>).</p>
+  <p>Everything runs in memory against a fake Loom. Two agent sessions (<b class="who-A">A</b>, <b class="who-B">B</b>) share it, both running as the single configured assignee <code>sean</code>, so you can see races. Click a tool name on the left to load it into free-play.</p>
+</header>
+<main>
+  <section id="catalog"><h2>Tool catalog (what <code>tools/list</code> returns)</h2><div id="tools"></div></section>
+  <section>
+    <h2>Walkthroughs</h2>
+    <div class="tabs" id="tabs"></div>
+    <p class="desc" id="scenario-desc"></p>
+    <div id="scenario-q"></div>
+    <div class="steps" id="steps"></div>
+    <h2 style="margin-top:20px">Free play</h2>
+    <div class="row">
+      <label>Session <select id="fp-session"><option>A</option><option>B</option></select></label>
+      <label>cwd <select id="fp-cwd"><option>/Users/sean/code/loom</option><option>/Users/sean/code/loom/cmd/loom</option><option>/tmp/scratch</option></select></label>
+      <label>Tool <select id="fp-tool"></select></label>
+      <label><input type="checkbox" id="fp-drop"> drop reply (shim sees outcome unknown)</label>
+    </div>
+    <textarea id="fp-args">{}</textarea>
+    <div class="row"><button class="primary" id="fp-call">Call</button><button id="fp-reset">Reset Loom</button></div>
+    <h2 style="margin-top:20px">Call log (newest first)</h2>
+    <div id="log"></div>
+  </section>
+  <section>
+    <h2>Loom state</h2>
+    <div id="state"></div>
+  </section>
+</main>
+
+<script>
+/* ===================================================================
+   Pure module: the tool surface. No DOM. call(state, tool, args, ctx)
+   returns { state, result } where result is either the tool's
+   structured output or { error: { code, message, ...data } }.
+   =================================================================== */
+const Loom = (() => {
+  const BASE_URL = 'http://127.0.0.1:4747';
+  const WF_TYPES = ['wayfinder:research', 'wayfinder:prototype', 'wayfinder:grilling', 'wayfinder:task'];
+  const TRIAGE = ['bug', 'enhancement', 'needs-triage', 'needs-info', 'ready-for-agent', 'ready-for-human', 'wontfix'];
+  const COLORS = ['#d73a4a', '#a2eeef', '#7057ff', '#008672', '#e4e669', '#d876e3', '#0075ca', '#cfd3d7', '#fbca04', '#5319e7', '#1d76db'];
+
+  const P = (name, type, desc, req) => ({ name, type, desc, req: !!req });
+  const project = P('project', 'string', 'Project Slug; overrides cwd resolution. Required for direct-HTTP clients.');
+  const ref = P('ref', 'string', '"#12", "12", "loom#12", or the issue URL', true);
+
+  // The catalog. Descriptions are what the agent reads in tools/list.
+  const TOOLS = [
+    { group: 'Projects' },
+    { name: 'create_project', summary: 'Register the current git root (or cwd) as a Project and seed the 11 default labels.',
+      params: [P('slug', 'string', 'Defaults to the git root folder name; required outside git')],
+      returns: '{ slug, root, labels[] }' },
+    { name: 'list_projects', summary: 'All Projects with their Roots.', params: [], returns: '{ projects: [{ slug, root, open_issues }] }' },
+    { name: 'delete_project', summary: 'Hard delete a Project and everything in it.',
+      params: [P('slug', 'string', '', true), P('confirm', 'string', 'Must equal slug', true)], returns: '{ deleted }' },
+
+    { group: 'Reading' },
+    { name: 'view_issue', summary: 'One issue (open or closed) with body, comments, blockers, and child summaries (no child bodies: this is the low-res map view).',
+      params: [ref, P('comments', 'bool', 'Include comments (default true)'), P('events', 'bool', 'Include the event log (default false)'), project],
+      returns: '{ ref, url, kind, title, state, assignee, labels, parent, version, body, blocked_by[], children[], comments[] }' },
+    { name: 'list_issues', summary: 'Filtered list, oldest first. Filters combine with AND.',
+      params: [P('state', 'open|closed|all', 'default open'), P('labels', 'string[]', 'Has all of these'), P('no_labels', 'bool', 'Has no labels at all'),
+        P('parent', 'ref', 'Children of this issue'), P('kind', 'issue|map', ''), P('assignee', '"none"|"any"|name', ''),
+        P('blocked', 'bool', 'true = has an open blocker'), P('detail', 'summary|full', 'full adds body + comments'), P('limit', 'int', 'default 50'), project],
+      returns: '{ total, issues: [summary] }' },
+    { name: 'frontier', summary: 'Open, unblocked, unclaimed children of an issue, in creation order. Take the first.',
+      params: [P('parent', 'ref', 'A Map or any parent issue', true), project],
+      returns: '{ parent, frontier: [summary], skipped: { claimed, blocked } }' },
+
+    { group: 'Writing issues' },
+    { name: 'create_issue', summary: 'Create an issue or a Map. Parent, labels and blockers are set atomically with the create (a Ticket must be born with its wayfinder label).',
+      params: [P('title', 'string', '', true), P('body', 'markdown', ''), P('kind', 'issue|map', 'default issue; immutable'),
+        P('parent', 'ref', ''), P('labels', 'string[]', ''), P('blocked_by', 'ref[]', ''), project],
+      returns: '{ ref, url, title, kind, version }' },
+    { name: 'edit_issue', summary: 'Replace title and/or body. Pass the version you read; a mismatch returns the current text instead of overwriting.',
+      params: [ref, P('version', 'int', 'From your last view_issue', true), P('title', 'string', ''), P('body', 'markdown', ''), project],
+      returns: '{ ref, version }' },
+    { name: 'append_to_section', summary: 'Append a line to the end of a "## Heading" section of the body. No version needed: safe under concurrent sessions.',
+      params: [ref, P('heading', 'string', 'e.g. "Decisions so far"', true), P('text', 'markdown', '', true), project],
+      returns: '{ ref, version }' },
+    { name: 'comment', summary: 'Add an immutable Markdown comment.', params: [ref, P('body', 'markdown', '', true), project],
+      returns: '{ ref, comment_id, url }' },
+    { name: 'label', summary: 'Add and/or remove labels in one atomic step (a triage transition is one call).',
+      params: [ref, P('add', 'string[]', ''), P('remove', 'string[]', ''), project], returns: '{ ref, labels }' },
+    { name: 'close', summary: 'Close, optionally posting a comment and/or applying wontfix in the same step. Closing a closed issue is a no-op.',
+      params: [ref, P('comment', 'markdown', ''), P('wontfix', 'bool', 'Also apply the wontfix label (not allowed on Tickets)'), project], returns: '{ ref, state, labels, already }' },
+    { name: 'reopen', summary: 'Reopen a closed issue.', params: [ref, project], returns: '{ ref, state }' },
+    { name: 'claim', summary: 'Assign to the configured user only if unassigned. Fails naming the holder otherwise.',
+      params: [ref, project], returns: '{ ref, assignee }' },
+    { name: 'release', summary: 'Clear the assignee.', params: [ref, project], returns: '{ ref, assignee: null }' },
+    { name: 'set_parent', summary: 'Set or clear (null) the parent.', params: [ref, P('parent', 'ref|null', '', true), project], returns: '{ ref, parent }' },
+    { name: 'add_blockers', summary: 'Mark ref as blocked by each listed issue. Duplicates ignored; cycles rejected.',
+      params: [ref, P('blocked_by', 'ref[]', '', true), project], returns: '{ ref, blocked_by[] }' },
+    { name: 'remove_blockers', summary: 'Remove blocked-by edges.', params: [ref, P('blocked_by', 'ref[]', '', true), project], returns: '{ ref, blocked_by[] }' },
+    { name: 'delete_issue', summary: 'Hard delete (comments, events, edges go too; children become parentless). #N is never reused.',
+      params: [ref, P('confirm', 'string', 'Must equal "#N"', true), project], returns: '{ deleted }' },
+
+    { group: 'Labels' },
+    { name: 'list_labels', summary: 'Labels in the Project with usage counts.', params: [project], returns: '{ labels: [{ name, description, color, used_by }] }' },
+    { name: 'create_label', summary: 'Create a label. Creating one that exists is a no-op.', params: [P('name', 'string', '', true), P('description', 'string', ''), project],
+      returns: '{ name, created }' },
+    { name: 'delete_label', summary: 'Delete an unused label.', params: [P('name', 'string', '', true), project], returns: '{ deleted }' },
+  ];
+
+  const initial = () => ({ projects: {}, clock: 0, assignee: 'sean' });
+
+  const err = (code, message, data = {}) => ({ error: { code, message, ...data } });
+  class ToolError extends Error { constructor(e) { super(e.error.message); this.payload = e; } }
+  const fail = (code, message, data) => { throw new ToolError(err(code, message, data)); };
+
+  const now = (s) => `2026-10-22T10:${String(++s.clock).padStart(2, '0')}:00Z`;
+  const url = (p, n) => `${BASE_URL}/${p.slug}/issues/${n}`;
+  const basename = (path) => path.split('/').filter(Boolean).pop();
+
+  function resolveProject(s, args, ctx, refStr) {
+    // A URL or slug#N ref names its own Project.
+    const m = refStr && (String(refStr).match(/^https?:\/\/[^/]+\/([a-z0-9-]+)\/issues\/\d+$/) || String(refStr).match(/^([a-z0-9-]+)#\d+$/));
+    const slug = args.project || (m && m[1]);
+    if (slug) {
+      if (!s.projects[slug]) fail('unknown_project', `No Project "${slug}".`, { projects: Object.values(s.projects).map(p => ({ slug: p.slug, root: p.root })) });
+      return s.projects[slug];
+    }
+    if (!ctx.cwd) fail('no_project', 'No cwd header: pass `project`.');
+    const hit = Object.values(s.projects).filter(p => ctx.cwd === p.root || ctx.cwd.startsWith(p.root + '/')).sort((a, b) => b.root.length - a.root.length)[0];
+    if (!hit) fail('no_project', `No Project's Root contains ${ctx.cwd}. Pass \`project\`, or call create_project here.`, { projects: Object.values(s.projects).map(p => ({ slug: p.slug, root: p.root })) });
+    return hit;
+  }
+
+  function parseN(r) {
+    const m = String(r).match(/(\d+)$/);
+    if (!m) fail('bad_ref', `Can't read "${r}" as an issue reference. Use "#12", "loom#12", or a URL.`);
+    return +m[1];
+  }
+  function getIssue(p, r) {
+    const n = parseN(r);
+    const i = p.issues[n];
+    if (!i) fail('not_found', `#${n} does not exist in ${p.slug}${n < p.nextN ? ' (it was deleted)' : ''}.`);
+    return i;
+  }
+
+  const openBlockers = (p, i) => i.blockedBy.filter(b => p.issues[b] && p.issues[b].state === 'open');
+  const summary = (p, i) => ({
+    ref: `#${i.n}`, title: i.title, kind: i.kind, state: i.state, labels: i.labels, assignee: i.assignee,
+    ...(openBlockers(p, i).length ? { open_blockers: openBlockers(p, i).map(b => `#${b}`) } : {}),
+  });
+
+  function event(s, i, ctx, type, data = {}) { i.events.push({ at: now(s), actor: `${s.assignee} (session ${ctx.session})`, type, ...data }); i.updated = s.clock; }
+
+  function checkLabels(p, names) {
+    const bad = names.filter(n => !p.labels[n]);
+    if (bad.length) fail('unknown_label', `Unknown label(s): ${bad.join(', ')}. Create them with create_label first.`, { valid: Object.keys(p.labels) });
+  }
+  function checkTicketRules(p, kind, parentN, labels) {
+    if (kind === 'map' && parentN) fail('map_has_parent', 'A Map cannot have a parent.');
+    if (!parentN) return;
+    const parent = p.issues[parentN];
+    const grand = parent.parent && p.issues[parent.parent];
+    if (grand && grand.kind === 'map') fail('ticket_has_children', `#${parent.n} is a Ticket; Tickets cannot have children.`);
+    if (parent.kind !== 'map') return;
+    const wf = labels.filter(l => WF_TYPES.includes(l));
+    if (wf.length !== 1) fail('ticket_type', `A Ticket (child of Map #${parentN}) needs exactly one wayfinder type label; got ${wf.length ? wf.join(', ') : 'none'}.`, { valid_types: WF_TYPES });
+    const tri = labels.filter(l => TRIAGE.includes(l));
+    if (tri.length) fail('ticket_triage_label', `Tickets cannot carry triage labels: ${tri.join(', ')}.`);
+  }
+  function wouldCycle(p, from, to, next) { // is `to` reachable from `from` via next()?
+    const seen = new Set(); const stack = [from];
+    while (stack.length) { const x = stack.pop(); if (x === to) return true; if (seen.has(x)) continue; seen.add(x); stack.push(...next(x)); }
+    return false;
+  }
+
+  function viewOut(p, i, args) {
+    return {
+      ref: `#${i.n}`, url: url(p, i.n), project: p.slug, kind: i.kind, title: i.title, state: i.state, assignee: i.assignee,
+      labels: i.labels, parent: i.parent ? { ref: `#${i.parent}`, title: p.issues[i.parent].title } : null,
+      author: i.author, created: i.created, version: i.version, body: i.body,
+      blocked_by: i.blockedBy.filter(b => p.issues[b]).map(b => ({ ref: `#${b}`, title: p.issues[b].title, state: p.issues[b].state })),
+      children: Object.values(p.issues).filter(c => c.parent === i.n).map(c => summary(p, c)),
+      ...(args.comments === false ? {} : { comments: i.comments }),
+      ...(args.events ? { events: i.events } : {}),
+    };
+  }
+
+  const handlers = {
+    create_project(s, a, ctx) {
+      if (!ctx.cwd) fail('no_cwd', 'create_project needs a cwd (use `loom mcp`).');
+      const slug = a.slug || basename(ctx.cwd);
+      if (!/^[a-z0-9-]+$/.test(slug)) fail('bad_slug', `Slug "${slug}" must match [a-z0-9-]+.`);
+      if (s.projects[slug]) fail('slug_taken', `Slug "${slug}" is taken by ${s.projects[slug].root}. Pass a different \`slug\`.`);
+      if (Object.values(s.projects).some(p => p.root === ctx.cwd)) fail('root_taken', `${ctx.cwd} is already a Root.`);
+      const labels = {};
+      [...TRIAGE, ...WF_TYPES].forEach((n, k) => labels[n] = { name: n, description: '', color: COLORS[k % COLORS.length] });
+      s.projects[slug] = { slug, root: ctx.cwd, labels, issues: {}, nextN: 1, nextComment: 1 };
+      return { slug, root: ctx.cwd, labels: Object.keys(labels) };
+    },
+    list_projects(s) {
+      return { projects: Object.values(s.projects).map(p => ({ slug: p.slug, root: p.root, open_issues: Object.values(p.issues).filter(i => i.state === 'open').length })) };
+    },
+    delete_project(s, a) {
+      if (!s.projects[a.slug]) fail('unknown_project', `No Project "${a.slug}".`);
+      if (a.confirm !== a.slug) fail('confirm_mismatch', `Pass confirm: "${a.slug}" to delete it and every issue in it.`);
+      delete s.projects[a.slug];
+      return { deleted: a.slug };
+    },
+
+    view_issue(s, a, ctx) { const p = resolveProject(s, a, ctx, a.ref); return viewOut(p, getIssue(p, a.ref), a); },
+
+    list_issues(s, a, ctx) {
+      const p = resolveProject(s, a, ctx);
+      const state = a.state || 'open';
+      let xs = Object.values(p.issues);
+      if (state !== 'all') xs = xs.filter(i => i.state === state);
+      if (a.labels) { checkLabels(p, a.labels); xs = xs.filter(i => a.labels.every(l => i.labels.includes(l))); }
+      if (a.no_labels) xs = xs.filter(i => !i.labels.length);
+      if (a.parent) { const par = getIssue(p, a.parent); xs = xs.filter(i => i.parent === par.n); }
+      if (a.kind) xs = xs.filter(i => i.kind === a.kind);
+      if (a.assignee === 'none') xs = xs.filter(i => !i.assignee);
+      else if (a.assignee === 'any') xs = xs.filter(i => i.assignee);
+      else if (a.assignee) xs = xs.filter(i => i.assignee === a.assignee);
+      if (a.blocked !== undefined) xs = xs.filter(i => (openBlockers(p, i).length > 0) === a.blocked);
+      xs.sort((x, y) => x.n - y.n);
+      const total = xs.length;
+      xs = xs.slice(0, a.limit || 50);
+      return { total, issues: xs.map(i => a.detail === 'full' ? { ...summary(p, i), body: i.body, comments: i.comments } : summary(p, i)) };
+    },
+
+    frontier(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.parent);
+      const par = getIssue(p, a.parent);
+      const kids = Object.values(p.issues).filter(i => i.parent === par.n && i.state === 'open').sort((x, y) => x.n - y.n);
+      const blocked = kids.filter(i => openBlockers(p, i).length);
+      const claimed = kids.filter(i => i.assignee && !openBlockers(p, i).length);
+      const frontier = kids.filter(i => !i.assignee && !openBlockers(p, i).length);
+      return { parent: `#${par.n}`, frontier: frontier.map(i => summary(p, i)), skipped: { claimed: claimed.map(i => `#${i.n}`), blocked: blocked.map(i => `#${i.n}`) } };
+    },
+
+    create_issue(s, a, ctx) {
+      const p = resolveProject(s, a, ctx);
+      if (!a.title) fail('missing_arg', 'title is required.');
+      const kind = a.kind || 'issue';
+      const labels = [...new Set(a.labels || [])];
+      checkLabels(p, labels);
+      const parentN = a.parent ? getIssue(p, a.parent).n : null;
+      checkTicketRules(p, kind, parentN, labels);
+      const blockers = (a.blocked_by || []).map(r => getIssue(p, r).n);
+      const n = p.nextN++;
+      const i = { n, kind, title: a.title, body: a.body || '', state: 'open', assignee: null, labels, parent: parentN, blockedBy: [...new Set(blockers)],
+        version: 1, author: s.assignee, created: now(s), updated: s.clock, comments: [], events: [] };
+      p.issues[n] = i;
+      event(s, i, ctx, 'created');
+      return { ref: `#${n}`, url: url(p, n), title: i.title, kind, version: 1 };
+    },
+
+    edit_issue(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      if (a.version !== i.version) fail('version_conflict', `#${i.n} changed since you read it (you had v${a.version}, it is v${i.version}). Re-apply your change to the current text and retry with version ${i.version}.`,
+        { current: { version: i.version, title: i.title, body: i.body } });
+      if (a.title !== undefined && a.title !== i.title) { event(s, i, ctx, 'title_edited', { previous: i.title }); i.title = a.title; }
+      if (a.body !== undefined && a.body !== i.body) { event(s, i, ctx, 'body_edited', { previous: i.body }); i.body = a.body; }
+      i.version++;
+      return { ref: `#${i.n}`, version: i.version };
+    },
+
+    append_to_section(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      const lines = i.body.split('\n');
+      const start = lines.findIndex(l => l.trim() === `## ${a.heading}`);
+      if (start < 0) fail('no_section', `#${i.n} has no "## ${a.heading}" section.`, { headings: lines.filter(l => l.startsWith('## ')).map(l => l.slice(3)) });
+      let end = lines.findIndex((l, k) => k > start && l.startsWith('## '));
+      if (end < 0) end = lines.length;
+      let at = end; while (at > start + 1 && lines[at - 1].trim() === '') at--;
+      const prev = i.body;
+      lines.splice(at, 0, a.text);
+      i.body = lines.join('\n');
+      event(s, i, ctx, 'body_edited', { previous: prev, via: 'append_to_section' });
+      i.version++;
+      return { ref: `#${i.n}`, version: i.version };
+    },
+
+    comment(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      if (!a.body) fail('missing_arg', 'body is required.');
+      const id = p.nextComment++;
+      i.comments.push({ id, author: s.assignee, at: now(s), body: a.body });
+      event(s, i, ctx, 'commented', { comment_id: id });
+      return { ref: `#${i.n}`, comment_id: id, url: `${url(p, i.n)}#comment-${id}` };
+    },
+
+    label(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      const add = a.add || [], remove = a.remove || [];
+      checkLabels(p, [...add, ...remove]);
+      const next = [...new Set(i.labels.filter(l => !remove.includes(l)).concat(add))];
+      if (i.parent) checkTicketRules(p, i.kind, i.parent, next);
+      add.filter(l => !i.labels.includes(l)).forEach(l => event(s, i, ctx, 'labelled', { label: l }));
+      remove.filter(l => i.labels.includes(l)).forEach(l => event(s, i, ctx, 'unlabelled', { label: l }));
+      i.labels = next;
+      return { ref: `#${i.n}`, labels: next };
+    },
+
+    close(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      if (i.state === 'closed') return { ref: `#${i.n}`, state: 'closed', labels: i.labels, already: true };
+      if (a.wontfix) handlers.label(s, { ref: a.ref, add: ['wontfix'], project: a.project }, ctx);
+      if (a.comment) handlers.comment(s, { ref: a.ref, body: a.comment, project: a.project }, ctx);
+      i.state = 'closed'; event(s, i, ctx, 'closed');
+      return { ref: `#${i.n}`, state: 'closed', labels: i.labels, already: false };
+    },
+    reopen(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      if (i.state === 'open') return { ref: `#${i.n}`, state: 'open', already: true };
+      i.state = 'open'; event(s, i, ctx, 'reopened');
+      return { ref: `#${i.n}`, state: 'open', already: false };
+    },
+    claim(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      if (i.assignee) {
+        const at = [...i.events].reverse().find(e => e.type === 'assigned');
+        fail('already_claimed', `#${i.n} is already claimed by ${i.assignee}${at ? ` (since ${at.at})` : ''}.`, { holder: i.assignee, claimed_at: at && at.at });
+      }
+      i.assignee = s.assignee; event(s, i, ctx, 'assigned', { assignee: s.assignee });
+      return { ref: `#${i.n}`, assignee: i.assignee };
+    },
+    release(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      if (i.assignee) { event(s, i, ctx, 'unassigned', { previous: i.assignee }); i.assignee = null; }
+      return { ref: `#${i.n}`, assignee: null };
+    },
+    set_parent(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      const parN = a.parent === null ? null : getIssue(p, a.parent).n;
+      if (parN !== null) {
+        if (wouldCycle(p, parN, i.n, x => p.issues[x].parent ? [p.issues[x].parent] : [])) fail('cycle', `#${parN} is a descendant of #${i.n}.`);
+        if (Object.values(p.issues).some(c => c.parent === i.n) && p.issues[parN].kind === 'map') fail('ticket_has_children', `#${i.n} has children, so it can't become a Ticket.`);
+        checkTicketRules(p, i.kind, parN, i.labels);
+      }
+      event(s, i, ctx, parN ? 'parent_set' : 'parent_cleared', { previous: i.parent ? `#${i.parent}` : null });
+      i.parent = parN;
+      return { ref: `#${i.n}`, parent: parN ? `#${parN}` : null };
+    },
+    add_blockers(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      for (const r of a.blocked_by || []) {
+        const b = getIssue(p, r);
+        if (b.n === i.n) fail('self_block', `#${i.n} cannot block itself.`);
+        if (wouldCycle(p, b.n, i.n, x => p.issues[x] ? p.issues[x].blockedBy : [])) fail('cycle', `#${b.n} is already (transitively) blocked by #${i.n}.`);
+        if (!i.blockedBy.includes(b.n)) { i.blockedBy.push(b.n); event(s, i, ctx, 'blocker_added', { blocker: `#${b.n}` }); }
+      }
+      return { ref: `#${i.n}`, blocked_by: i.blockedBy.map(b => `#${b}`) };
+    },
+    remove_blockers(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      const rm = (a.blocked_by || []).map(parseN);
+      rm.filter(b => i.blockedBy.includes(b)).forEach(b => event(s, i, ctx, 'blocker_removed', { blocker: `#${b}` }));
+      i.blockedBy = i.blockedBy.filter(b => !rm.includes(b));
+      return { ref: `#${i.n}`, blocked_by: i.blockedBy.map(b => `#${b}`) };
+    },
+    delete_issue(s, a, ctx) {
+      const p = resolveProject(s, a, ctx, a.ref); const i = getIssue(p, a.ref);
+      if (a.confirm !== `#${i.n}`) fail('confirm_mismatch', `Pass confirm: "#${i.n}" to hard-delete "${i.title}".`);
+      delete p.issues[i.n];
+      Object.values(p.issues).forEach(o => { if (o.parent === i.n) o.parent = null; o.blockedBy = o.blockedBy.filter(b => b !== i.n); });
+      return { deleted: `#${i.n}` };
+    },
+
+    list_labels(s, a, ctx) {
+      const p = resolveProject(s, a, ctx);
+      return { labels: Object.values(p.labels).map(l => ({ ...l, used_by: Object.values(p.issues).filter(i => i.labels.includes(l.name)).length })) };
+    },
+    create_label(s, a, ctx) {
+      const p = resolveProject(s, a, ctx);
+      if (p.labels[a.name]) return { name: a.name, created: false };
+      p.labels[a.name] = { name: a.name, description: a.description || '', color: COLORS[Object.keys(p.labels).length % COLORS.length] };
+      return { name: a.name, created: true };
+    },
+    delete_label(s, a, ctx) {
+      const p = resolveProject(s, a, ctx);
+      if (!p.labels[a.name]) fail('unknown_label', `No label "${a.name}".`);
+      const users = Object.values(p.issues).filter(i => i.labels.includes(a.name)).map(i => `#${i.n}`);
+      if (users.length) fail('label_in_use', `"${a.name}" is used by ${users.join(', ')}.`, { used_by: users });
+      delete p.labels[a.name];
+      return { deleted: a.name };
+    },
+  };
+
+  // Each call is one transaction: a thrown error leaves state untouched.
+  function call(state, tool, args, ctx) {
+    const s = structuredClone(state);
+    if (!handlers[tool]) return { state, result: err('unknown_tool', `No tool "${tool}".`) };
+    try { const result = handlers[tool](s, args || {}, ctx); return { state: s, result }; }
+    catch (e) { if (e instanceof ToolError) return { state, result: e.payload }; throw e; }
+  }
+
+  return { TOOLS, initial, call };
+})();
+
+/* ===================================================================
+   Throwaway page shell.
+   =================================================================== */
+const CWD = '/Users/sean/code/loom';
+const MAP_BODY = `## Destination
+
+An implementation-ready spec for Loom v1.
+
+## Notes
+
+- Stack: Go, SQLite, plain HTML.
+
+## Decisions so far
+
+## Not yet specified
+
+- Search over issues.
+- Live UI updates.
+
+## Out of scope
+
+- Pull requests.`;
+
+const setupMap = [
+  ['A', 'create_project', {}],
+  ['A', 'create_issue', { kind: 'map', title: 'Map: Loom v1', body: MAP_BODY }],
+  ['A', 'create_issue', { title: 'Daemon spawning', parent: '#1', labels: ['wayfinder:research'], body: '## Question\n\nHow does `loom mcp` start the daemon?' }],
+  ['A', 'create_issue', { title: 'Data model', parent: '#1', labels: ['wayfinder:grilling'], body: '## Question\n\nWhat are the entities?' }],
+  ['A', 'create_issue', { title: 'MCP tool surface', parent: '#1', labels: ['wayfinder:prototype'], blocked_by: ['#3'], body: '## Question\n\nWhat tools?' }],
+];
+
+const SCENARIOS = [
+  { name: 'Chart a map', desc: 'Wayfinder charting: create the Map, create Tickets (born with parent + type label), then a second pass wires blocking and fixes cross-references with real ids. Watch the ids come back from each create, and the low-res map view at the end.',
+    setup: [],
+    steps: [
+      ['A', 'create_project', {}, 'Slug defaults to the git root folder name.'],
+      ['A', 'create_issue', { kind: 'map', title: 'Map: Loom v1', body: MAP_BODY }, 'kind: map replaces the wayfinder:map label.'],
+      ['A', 'create_issue', { title: 'Daemon spawning', parent: '#1', labels: ['wayfinder:research'], body: '## Question\n\nHow does `loom mcp` start the daemon?' }],
+      ['A', 'create_issue', { title: 'Data model', parent: '#1', labels: ['wayfinder:grilling'], body: '## Question\n\nWhat are the entities?' }],
+      ['A', 'create_issue', { title: 'MCP tool surface', parent: '#1', labels: ['wayfinder:prototype'], body: '## Question\n\nWhat tools? (see TBD)' }],
+      ['A', 'add_blockers', { ref: '#4', blocked_by: ['#3'] }, 'Second pass: wire blocking now that ids exist.'],
+      ['A', 'edit_issue', { ref: '#4', version: 1, body: '## Question\n\nWhat tools? (see #3)' }, 'Second pass: replace the placeholder with the real id. Version 1 came back from create_issue.'],
+      ['A', 'frontier', { parent: '#1' }, '#4 is skipped as blocked.'],
+      ['A', 'view_issue', { ref: '#1', comments: false }, 'Low-res map view: body + child summaries, no child bodies.'],
+    ] },
+  { name: 'Work a ticket', desc: 'Two sessions work the same Map. B reads the frontier, A claims the first ticket before B does, so B\'s claim fails and B moves to the next. Both then append Decisions-so-far lines concurrently; neither is lost.',
+    setup: setupMap,
+    steps: [
+      ['B', 'frontier', { parent: '#1' }, 'B sees #2 first.'],
+      ['A', 'claim', { ref: '#2' }, 'A gets there first.'],
+      ['B', 'claim', { ref: '#2' }, 'B loses the race: error names the holder.'],
+      ['B', 'frontier', { parent: '#1' }, 'B re-reads; #2 is now skipped as claimed.'],
+      ['B', 'claim', { ref: '#3' }],
+      ['A', 'close', { ref: '#2', comment: '## Answer\n\nShim probes /healthz, spawns `loom serve` via Setsid.' }, 'Resolution comment + close in one call.'],
+      ['A', 'append_to_section', { ref: '#1', heading: 'Decisions so far', text: '- [Daemon spawning](http://127.0.0.1:4747/loom/issues/2): shim probes /healthz, Setsid spawn.' }],
+      ['B', 'close', { ref: '#3', comment: '## Answer\n\nIssues, Projects, Labels, Events.' }],
+      ['B', 'append_to_section', { ref: '#1', heading: 'Decisions so far', text: '- [Data model](http://127.0.0.1:4747/loom/issues/3): Issues with kind, labels, events.' }, 'No version needed: both appends land.'],
+      ['A', 'frontier', { parent: '#1' }, '#4 is unblocked now that #3 closed.'],
+      ['A', 'view_issue', { ref: '#1', comments: false }],
+    ] },
+  { name: 'Edit conflict', desc: 'A reads the Map to prune the fog. Meanwhile B appends a decision. A\'s whole-body edit carries the stale version, so it is refused and handed the current text instead of silently wiping B\'s line.',
+    setup: setupMap,
+    steps: [
+      ['A', 'view_issue', { ref: '#1', comments: false }, 'A reads version 1.'],
+      ['B', 'append_to_section', { ref: '#1', heading: 'Decisions so far', text: '- [Data model](http://127.0.0.1:4747/loom/issues/3): settled.' }, 'Now version 2.'],
+      ['A', 'edit_issue', { ref: '#1', version: 1, body: MAP_BODY.replace('- Search over issues.\n', '') }, 'Refused: version_conflict with current text.'],
+      ['A', 'edit_issue', { ref: '#1', version: 2, body: MAP_BODY.replace('- Search over issues.\n', '').replace('## Decisions so far\n', '## Decisions so far\n\n- [Data model](http://127.0.0.1:4747/loom/issues/3): settled.\n') }, 'A re-applies on top of v2.'],
+      ['A', 'view_issue', { ref: '#1', comments: false, events: true }, 'Events keep the previous bodies.'],
+    ] },
+  { name: 'Ticket rules', desc: 'Things that should be impossible. Each is rejected with an error the agent can act on (valid types, valid labels).',
+    setup: setupMap,
+    steps: [
+      ['A', 'create_issue', { title: 'Untyped ticket', parent: '#1' }, 'No wayfinder type label.'],
+      ['A', 'create_issue', { title: 'Double-typed', parent: '#1', labels: ['wayfinder:research', 'wayfinder:task'] }],
+      ['A', 'create_issue', { title: 'Triage on a ticket', parent: '#1', labels: ['wayfinder:task', 'needs-triage'] }],
+      ['A', 'create_issue', { title: 'Grandchild', parent: '#2' }, 'Tickets cannot have children.'],
+      ['A', 'label', { ref: '#2', remove: ['wayfinder:research'] }, 'Would leave the Ticket untyped.'],
+      ['A', 'label', { ref: '#2', add: ['wayfinder:taks'] }, 'Typo: error lists valid labels.'],
+      ['A', 'label', { ref: '#2', add: ['wayfinder:task'], remove: ['wayfinder:research'] }, 'Retyping in one atomic call is fine.'],
+      ['A', 'create_issue', { kind: 'map', title: 'Nested map', parent: '#1' }],
+      ['A', 'add_blockers', { ref: '#3', blocked_by: ['#4'] }, '#4 is already blocked by #3: cycle.'],
+      ['A', 'close', { ref: '#3', wontfix: true }, 'wontfix is a triage label: rejected on a Ticket (out-of-scope Tickets just close).'],
+    ] },
+  { name: 'Triage', desc: 'The /triage loop: find unlabelled issues, apply category + state, transition states atomically, and close as wontfix with a comment.',
+    setup: [
+      ['A', 'create_project', {}],
+      ['A', 'create_issue', { title: 'Crash on empty body', body: 'Creating an issue with no body panics.' }],
+      ['A', 'create_issue', { title: 'Dark mode', body: 'Please add dark mode.', labels: ['enhancement', 'needs-info'] }],
+    ],
+    steps: [
+      ['A', 'list_issues', { no_labels: true }, 'Bucket 1: unlabelled, oldest first.'],
+      ['A', 'label', { ref: '#1', add: ['bug', 'needs-triage'] }],
+      ['A', 'list_issues', { labels: ['needs-info'], detail: 'full' }, 'Bucket 3 needs comments to spot activity since the last triage notes.'],
+      ['A', 'comment', { ref: '#1', body: '> *This was generated by AI during triage.*\n\n## Agent Brief\n\nGuard against empty body in create.' }],
+      ['A', 'label', { ref: '#1', add: ['ready-for-agent'], remove: ['needs-triage'] }, 'State transition in one call.'],
+      ['A', 'close', { ref: '#2', wontfix: true, comment: '> *This was generated by AI during triage.*\n\nOut of scope, see `.out-of-scope/dark-mode.md`.' }, 'Comment + wontfix + close in one atomic call.'],
+      ['A', 'label', { ref: '#1', add: ['urgent'] }, 'Undefined label: rejected.'],
+      ['A', 'list_issues', { labels: ['ready-for-agent'] }, '"What\'s ready for agents?"'],
+    ] },
+  { name: 'Spec → tickets', desc: '/to-tickets publishes slices under a spec in dependency order with blockers set at create; /implement-spec works the frontier (plain children, not Tickets: no type label needed) and closes work directly.',
+    setup: [['A', 'create_project', {}]],
+    steps: [
+      ['A', 'create_issue', { title: 'Spec: Loom v1', body: '## Problem\n\n...', labels: ['ready-for-agent'] }],
+      ['A', 'create_issue', { title: 'Schema + migrations', parent: '#1', labels: ['ready-for-agent'], body: '## What to build\n\n...' }],
+      ['A', 'create_issue', { title: 'MCP tools', parent: '#1', labels: ['ready-for-agent'], blocked_by: ['#2'] }],
+      ['A', 'create_issue', { title: 'Web UI', parent: '#1', labels: ['ready-for-agent'], blocked_by: ['#2'] }],
+      ['A', 'frontier', { parent: '#1' }],
+      ['A', 'close', { ref: '#2', comment: 'Done in abc123.' }],
+      ['A', 'frontier', { parent: '#1' }, 'Both #3 and #4 open up.'],
+      ['A', 'view_issue', { ref: 'http://127.0.0.1:4747/loom/issues/3' }, 'A URL works as a ref.'],
+      ['A', 'delete_issue', { ref: '#4', confirm: '#4' }],
+      ['A', 'list_issues', { parent: '#1', state: 'all' }],
+    ] },
+  { name: 'Outcome unknown', desc: 'The shim never retries; a dropped reply reaches the agent as "outcome may be unknown, verify first". Verifying a create is easy. Verifying a claim is not: A and B are both "sean", so A cannot tell its own claim from B\'s.',
+    setup: setupMap,
+    steps: [
+      ['A', 'claim', { ref: '#2' }, 'Reply dropped.', true],
+      ['A', 'view_issue', { ref: '#2', comments: false }, 'A verifies: assignee is sean. But was that A?'],
+      ['A', 'claim', { ref: '#2' }, 'Retrying fails as already_claimed by sean: ambiguous.'],
+      ['A', 'create_issue', { title: 'Search', parent: '#1', labels: ['wayfinder:grilling'], body: '## Question\n\nFTS?' }, 'Reply dropped.', true],
+      ['A', 'list_issues', { parent: '#1', state: 'all' }, 'A verifies the create landed (#5) and does not redo it.'],
+    ] },
+  { name: 'Project binding', desc: 'Calls resolve the Project from the forwarded cwd (longest Root prefix). Outside any Root the error lists Projects; `project` overrides.',
+    setup: [['A', 'create_project', {}], ['A', 'create_issue', { title: 'First issue' }]],
+    steps: [
+      ['A', 'list_issues', {}, 'cwd is the repo root.'],
+      ['A', 'list_issues', { project: 'nope' }],
+      ['A', 'view_issue', { ref: 'loom#1' }, 'slug#N names the Project explicitly.'],
+      ['A', 'list_projects', {}],
+    ] },
+];
+
+let state = Loom.initial();
+let prevState = state;
+let log = [];
+let current = 0, stepIdx = 0;
+
+function run(session, tool, args, opts = {}) {
+  const ctx = { session, cwd: opts.cwd === undefined ? CWD : opts.cwd };
+  prevState = state;
+  const { state: next, result } = Loom.call(state, tool, args, ctx);
+  state = next;
+  const shown = opts.drop ? { error: { code: 'outcome_unknown', message: 'Lost contact with the Loom daemon mid-call; the call may or may not have been applied. Verify with view_issue/list_issues before redoing it. Daemon log: ~/.local/state/loom/serve.log' } } : result;
+  log.unshift({ session, tool, args, result: shown, setup: !!opts.setup, cwd: ctx.cwd });
+  return result;
+}
+
+function reset() { state = Loom.initial(); prevState = state; log = []; }
+
+function startScenario(k) {
+  current = k; stepIdx = 0; reset();
+  for (const [who, tool, args] of SCENARIOS[k].setup) run(who, tool, args, { setup: true });
+  prevState = state;
+  render();
+}
+
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const j = o => JSON.stringify(o, null, 2);
+const compact = o => JSON.stringify(o);
+
+function renderCatalog() {
+  const el = document.getElementById('tools'); el.innerHTML = '';
+  const sel = document.getElementById('fp-tool'); sel.innerHTML = '';
+  for (const t of Loom.TOOLS) {
+    if (t.group) { el.insertAdjacentHTML('beforeend', `<div class="group">${t.group}</div>`); continue; }
+    sel.insertAdjacentHTML('beforeend', `<option>${t.name}</option>`);
+    const rows = t.params.map(p => `<tr><td>${p.name}${p.req ? '<span class="req">*</span>' : ''}</td><td>${esc(p.type)}</td><td>${esc(p.desc)}</td></tr>`).join('');
+    const div = document.createElement('div'); div.className = 'tool';
+    div.innerHTML = `<div class="name">${t.name}</div><div class="sum">${esc(t.summary)}</div>${rows ? `<table>${rows}</table>` : ''}<div class="sum">→ <code>${esc(t.returns)}</code></div>`;
+    div.querySelector('.name').onclick = () => {
+      sel.value = t.name;
+      const ex = {}; t.params.filter(p => p.req).forEach(p => ex[p.name] = p.type.endsWith('[]') ? [] : p.type === 'int' ? 1 : '');
+      document.getElementById('fp-args').value = j(ex);
+    };
+    el.appendChild(div);
+  }
+  el.insertAdjacentHTML('beforeend', `<div class="group">Common to all</div><div class="sum">Errors come back as MCP tool errors carrying <code>{ error: { code, message, ...data } }</code>. Every tool takes optional <code>project</code>. ${Loom.TOOLS.filter(t => t.name).length} tools total.</div>`);
+}
+
+function renderScenario() {
+  const tabs = document.getElementById('tabs'); tabs.innerHTML = '';
+  SCENARIOS.forEach((sc, k) => {
+    const b = document.createElement('button'); b.textContent = sc.name; if (k === current) b.className = 'on';
+    b.onclick = () => startScenario(k); tabs.appendChild(b);
+  });
+  const sc = SCENARIOS[current];
+  document.getElementById('scenario-desc').textContent = sc.desc + (sc.setup.length ? ` (Setup ran ${sc.setup.length} calls, greyed in the log.)` : '');
+  const steps = document.getElementById('steps'); steps.innerHTML = '';
+  sc.steps.forEach(([who, tool, args, note, drop], k) => {
+    const row = document.createElement('div'); row.className = 'step' + (k < stepIdx ? ' done' : '');
+    const b = document.createElement('button'); b.disabled = k !== stepIdx;
+    b.innerHTML = `<code>${tool}</code> <code style="color:#6b6b70">${esc(compact(args)).slice(0, 140)}</code>${drop ? ' <b style="color:#c0392b">[reply dropped]</b>' : ''}${note ? `<div class="note">${esc(note)}</div>` : ''}`;
+    b.onclick = () => { run(who, tool, args, { drop }); stepIdx++; render(); };
+    row.innerHTML = `<span class="who who-${who}">${who}</span>`; row.appendChild(b); steps.appendChild(row);
+  });
+}
+
+function renderLog() {
+  document.getElementById('log').innerHTML = log.map(e => `
+    <div class="log-entry ${e.result.error ? 'error' : ''} ${e.setup ? 'setup' : ''}">
+      <div class="call"><span class="who who-${e.session}">${e.session}</span> ${e.setup ? '(setup) ' : ''}<b>${e.tool}</b> ${esc(compact(e.args))}${e.cwd !== CWD ? ` <i>cwd=${esc(e.cwd)}</i>` : ''}</div>
+      <pre class="res">${esc(j(e.result))}</pre>
+    </div>`).join('');
+}
+
+function renderState() {
+  const el = document.getElementById('state');
+  const ps = Object.values(state.projects);
+  if (!ps.length) { el.innerHTML = '<p class="desc">No Projects yet.</p>'; return; }
+  el.innerHTML = ps.map(p => {
+    const before = prevState.projects[p.slug] ? prevState.projects[p.slug].issues : {};
+    const rows = Object.values(p.issues).map(i => {
+      const b = before[i.n]; const changed = !b || JSON.stringify(b) !== JSON.stringify(i);
+      return `<tr class="${changed ? 'changed' : ''}">
+        <td>#${i.n}</td><td>${i.kind === 'map' ? '🗺 map' : 'issue'}</td>
+        <td class="${i.state === 'closed' ? 'closed' : ''}">${esc(i.title)}</td><td>${i.state}</td><td>${i.assignee || '–'}</td>
+        <td>${i.labels.map(l => `<span class="lab" style="border-left:3px solid ${p.labels[l] ? p.labels[l].color : '#ccc'}">${esc(l)}</span>`).join('')}</td>
+        <td>${i.parent ? '#' + i.parent : '–'}</td><td>${i.blockedBy.map(x => '#' + x).join(', ') || '–'}</td><td>v${i.version}</td><td>${i.comments.length}</td></tr>`;
+    }).join('');
+    const map = Object.values(p.issues).find(i => i.kind === 'map');
+    return `<h3>${p.slug} <span class="desc" style="font-weight:400">Root ${esc(p.root)}</span></h3>
+      <table class="state"><tr><th>#</th><th>kind</th><th>title</th><th>state</th><th>assignee</th><th>labels</th><th>parent</th><th>blocked by</th><th>ver</th><th>💬</th></tr>${rows || '<tr><td colspan=10 class="desc">No issues.</td></tr>'}</table>
+      ${map ? `<details open><summary>Map #${map.n} body (v${map.version})</summary><pre>${esc(map.body)}</pre></details>` : ''}`;
+  }).join('');
+}
+
+function render() { renderScenario(); renderLog(); renderState(); }
+
+document.getElementById('fp-call').onclick = () => {
+  let args; try { args = JSON.parse(document.getElementById('fp-args').value || '{}'); } catch (e) { alert('Args are not valid JSON'); return; }
+  run(document.getElementById('fp-session').value, document.getElementById('fp-tool').value, args,
+    { cwd: document.getElementById('fp-cwd').value, drop: document.getElementById('fp-drop').checked });
+  render();
+};
+document.getElementById('fp-reset').onclick = () => { reset(); stepIdx = 0; render(); };
+
+renderCatalog();
+startScenario(0);
+</script>
+</body>
+</html>

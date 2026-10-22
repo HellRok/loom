@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Loom web UI pages</title>
+<!--
+  PROTOTYPE, throwaway. Question: what should Loom's read-only web UI show, and how is it laid out?
+  Three variants of all four pages (project list, issue list, issue detail, Map view),
+  switchable via ?variant=A|B|C and the floating bar (or ← →). Pages via hash routes that mirror
+  the real URL scheme: #/  ·  #/<slug>  ·  #/<slug>/issues/<n>. Fake in-memory data, seeded from
+  the Loom v1 wayfinder map itself. Nothing writes: the real UI is read-only.
+-->
+<style>
+  :root { --fg:#1d1d1f; --mute:#6b6b70; --line:#e3e3e8; --bg:#fafafa; --card:#fff; --accent:#4b5bdc;
+          --open:#2e7d32; --closed:#8250df; --warn:#b26a00; --soft:#f4f4f7; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system, system-ui, sans-serif; color:var(--fg); background:var(--bg); padding-bottom:70px; }
+  a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+  code, pre { font:12px/1.45 ui-monospace, Menlo, monospace; }
+  pre { background:var(--soft); padding:8px; border-radius:6px; overflow:auto; white-space:pre-wrap; }
+  .lbl { display:inline-block; font-size:11px; padding:0 7px; border-radius:10px; line-height:18px; font-weight:600; margin-right:3px; white-space:nowrap; }
+  .mute { color:var(--mute); } .small { font-size:12px; }
+  .md h2 { font-size:16px; margin:16px 0 6px; padding-bottom:3px; border-bottom:1px solid var(--line); }
+  .md h3 { font-size:14px; } .md ul { padding-left:20px; margin:6px 0; } .md p { margin:6px 0; }
+  .md code { background:var(--soft); padding:0 3px; border-radius:3px; }
+  .proto-banner { background:#fde8e8; color:#c0392b; font-size:11px; font-weight:700; text-align:center; padding:2px; letter-spacing:.05em; }
+  /* switcher */
+  #switcher { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#111; color:#fff; border-radius:999px;
+    display:flex; align-items:center; gap:10px; padding:6px 10px; box-shadow:0 6px 24px rgba(0,0,0,.35); z-index:99; font:13px system-ui; }
+  #switcher button { background:#333; color:#fff; border:0; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:14px; }
+  #switcher .route { color:#aaa; font:11px ui-monospace, monospace; }
+</style>
+<style id="vstyle"></style>
+</head>
+<body>
+<div class="proto-banner">PROTOTYPE · fake data · read-only</div>
+<div id="app"></div>
+<div id="switcher"><button id="prev">←</button><span id="vlabel"></span><span class="route" id="vroute"></span><button id="next">→</button></div>
+
+<script>
+// ───────────────────────── fake data ─────────────────────────
+const LABELS = {
+  'bug':'#d73a4a','enhancement':'#a2eeef','needs-triage':'#fbca04','needs-info':'#d876e3','ready-for-agent':'#0e8a16',
+  'ready-for-human':'#1d76db','wontfix':'#bbbbbb','wayfinder:research':'#5319e7','wayfinder:prototype':'#e99695',
+  'wayfinder:grilling':'#c2e0c6','wayfinder:task':'#bfd4f2'
+};
+const ME = 'Sean Earle';
+const t = (d, h) => `2026-10-${String(d).padStart(2,"0")}T${String(h).padStart(2,'0')}:00:00`;
+
+const MAP_BODY = `## Destination
+
+An implementation-ready spec for Loom v1 plus a drop-in \`issue-tracker-loom.md\` for \`setup-matt-pocock-skills\`. v1 is done when every tracker-touching skill runs end-to-end against Loom with no tracker-specific workarounds.
+
+## Notes
+
+- **Domain**: local-first issue tracker that agents drive through MCP. Humans observe; agents act. Vocabulary in \`GLOSSARY.md\`.
+- **Stack**: Go (MCP server), SQLite, plain HTML web UI.
+- **Skills every session should consult**: \`grilling\` + \`domain-modeling\`, \`codebase-design\`.
+
+## Decisions so far
+
+- [Tracker operations the skills invoke](#5): 14 operations incl. ordered parent/child, blocked-by, frontier, claim.
+- [Background daemon spawning](#2): shim probes \`/healthz\`, spawns \`loom serve\` via Setsid; flock + port bind.
+- [Go MCP SDK choice](#3): official \`go-sdk\` v1.8.0; stateless streamable HTTP.
+- [Go SQLite driver choice](#4): \`modernc.org/sqlite\` + \`goose\`.
+- [How a session binds to a Project](#6): one Root per Project; longest-prefix match.
+- [Shim–daemon design](#7): thin SDK-level proxy, forwards \`X-Loom-Cwd\`.
+- [Data model](#8): immutable \`kind\`; version-checked edits; atomic claim; 11 seeded labels.
+- [MCP tool surface](#9): 23 tools; atomic \`create_issue\`; \`frontier\`; coded errors.
+
+## Not yet specified
+
+- Search / full-text over Issues and comments.
+- Live UI updates: plain refresh, polling, or SSE.
+- Config: file location, port, DB path, assignee name.
+- Daemon shutdown/upgrade story.
+
+## Out of scope
+
+- Pull/merge requests.
+- Multi-user, auth, hosting.
+- Writing from the web UI.`;
+
+// [n, title, type, state, assignee, blockedBy, day/hour created, closed day/hour, gist, question]
+const TICKETS = [
+  [2,'Background daemon spawning and single-instance in Go','research','closed',null,[],[20,9],[20,14],'Shim probes `/healthz` (with version), spawns `loom serve` via Setsid + log-file stdio; daemon holds a flock for life plus the port bind; no pidfile.','How should `loom mcp` detect a running daemon and, if absent, start `loom serve` detached?'],
+  [3,'Go MCP SDK choice','research','closed',null,[],[20,9],[20,13],'Official `go-sdk` v1.8.0; stateless streamable HTTP in the daemon; shim as an SDK-level stdio→HTTP proxy.','Which Go MCP library should Loom use?'],
+  [4,'Go SQLite driver choice','research','closed',null,[],[20,9],[20,12],'`modernc.org/sqlite` (pure Go; WAL/JSON/FTS5 built in) + `goose` migrations embedded.','Which Go SQLite driver fits a single static binary?'],
+  [5,'Tracker operations the skills invoke','research','closed',null,[],[20,9],[20,15],'14 operations incl. ordered parent/child, blocked-by, frontier, concurrency-safe claim, edit, delete, `#N` resolution.','Inventory every tracker operation the skills invoke.'],
+  [6,'How a session binds to a Project','grilling','closed',null,[],[20,9],[21,10],'One registered Root per Project; cwd → main-worktree root → longest-prefix match; optional `project` Slug override.','How does the agent\'s working directory map to a Project?'],
+  [7,'Shim–daemon design for `loom mcp`','grilling','closed',null,[3],[20,9],[21,13],'Thin SDK-level proxy, live `tools/list`, forwards only `X-Loom-Cwd`; failures surface as "outcome unknown".','Does `loom mcp` proxy MCP transparently or host the server itself?'],
+  [8,'Data model','grilling','closed',null,[5],[20,9],[21,17],'Immutable `kind`; open/closed + reopen; version-checked edits; hard delete; atomic claim; immutable comments; Events keep prior values.','What are Loom\'s entities and relationships?'],
+  [9,'MCP tool surface','prototype','closed',null,[3,5,8],[20,9],[22,11],'23 separate tools with atomic `create_issue`, `frontier`, `claim`, `append_to_section`, `close {comment, wontfix}`.','What tools does Loom expose over MCP?'],
+  [10,'Web UI pages','prototype','open',ME,[8],[20,9],null,null,'What does the read-only web UI show and how is it laid out?'],
+  [11,'Contents of issue-tracker-loom.md','grilling','open',null,[6,9,12],[20,9],null,null,'What goes in `issue-tracker-loom.md`, the drop-in doc for `setup-matt-pocock-skills`?'],
+  [12,'Agent session identity and the assignee','grilling','open',null,[],[22,11],null,null,'Should an agent session be able to get its own session id, so a claim shows which session holds an Issue?'],
+];
+
+function mkIssue(o) {
+  return Object.assign({kind:'issue', state:'open', labels:[], assignee:null, parent:null, blockedBy:[], author:ME,
+    comments:[], events:[], version:1, body:''}, o);
+}
+const loomIssues = [];
+const mapCreated = t(20,9);
+const mapEvents = [{at:mapCreated, actor:ME, type:'created'}];
+let prevBody = MAP_BODY.replace(/## Decisions so far[\s\S]*?## Not yet/, '## Decisions so far\n\n## Not yet');
+TICKETS.filter(x=>x[3]==='closed').sort((a,b)=>a[7][0]*100+a[7][1]-(b[7][0]*100+b[7][1])).forEach(x => {
+  const line = `- [${x[1]}](#${x[0]}): …`;
+  const next = prevBody.replace('## Not yet', line + '\n\n## Not yet').replace(/\n\n(- \[[^\n]*)\n\n## Not yet/, '\n$1\n\n## Not yet');
+  mapEvents.push({at:t(x[7][0],x[7][1]), actor:ME, type:'body edited', prev:prevBody, next});
+  prevBody = next;
+});
+loomIssues.push(mkIssue({n:1, kind:'map', title:'Loom v1', body:MAP_BODY, created:mapCreated, updated:t(22,11),
+  version:9, events:mapEvents}));
+TICKETS.forEach(([n,title,type,state,assignee,blockedBy,c,cl,gist,q]) => {
+  const ev = [{at:t(...c), actor:ME, type:'created'}, {at:t(...c), actor:ME, type:'labelled', detail:'wayfinder:'+type},
+              {at:t(...c), actor:ME, type:'parent set', detail:'#1'}];
+  blockedBy.forEach(b => ev.push({at:t(...c), actor:ME, type:'blocker added', detail:'#'+b}));
+  const comments = [];
+  if (cl) {
+    ev.push({at:t(cl[0],cl[1]-2), actor:ME, type:'assigned', detail:ME});
+    comments.push({author:ME, at:t(...cl), body:`**Resolved by ${type}.**\n\n${gist}`});
+    ev.push({at:t(...cl), actor:ME, type:'commented'});
+    ev.push({at:t(...cl), actor:ME, type:'closed'});
+  }
+  if (assignee) ev.push({at:t(22,12), actor:ME, type:'assigned', detail:assignee});
+  if (n===11) { comments.push({author:ME, at:t(21,13), body:'From [Shim–daemon design](#7): document the "outcome unknown" retry rule.'}); ev.push({at:t(21,13), actor:ME, type:'commented'}); }
+  if (n===10) { comments.push({author:ME, at:t(21,17), body:'From [Data model](#8): Map is a native `kind`, so the Map view keys off kind, not a label. Labels have colours; Events store previous title/body for diffs.'}); ev.push({at:t(21,17), actor:ME, type:'commented'}); }
+  ev.sort((a,b)=>a.at<b.at?-1:1);
+  loomIssues.push(mkIssue({n, title, state, assignee, blockedBy, parent:1, labels:['wayfinder:'+type],
+    body:`## Question\n\n${q}`, created:t(...c), updated: cl ? t(...cl) : t(22,12), comments, events:ev, version: 1}));
+});
+// ordinary issues, a spec with children, triage states
+loomIssues.push(
+  mkIssue({n:13, title:'Claim error shows stale holder after release', labels:['bug','needs-triage'], created:t(22,8), updated:t(22,8),
+    body:'Releasing then re-claiming from another session reports the old holder in `already_claimed`.\n\n## Repro\n\n- claim #10 in session A\n- release\n- claim in session B', events:[{at:t(22,8),actor:ME,type:'created'},{at:t(22,8),actor:ME,type:'labelled',detail:'bug'},{at:t(22,8),actor:ME,type:'labelled',detail:'needs-triage'}]}),
+  mkIssue({n:14, title:'Spec: label colour pool', created:t(21,9), updated:t(22,9), body:'## Problem\n\nLabels need readable colours in light and dark.\n\n## Solution\n\nA fixed pool of 12 colours, assigned at random on create.', version:3,
+    events:[{at:t(21,9),actor:ME,type:'created'},{at:t(21,11),actor:ME,type:'title edited',prev:'Label colours',next:'Spec: label colour pool'},{at:t(22,9),actor:ME,type:'body edited',prev:'## Problem\n\nLabels need colours.',next:'## Problem\n\nLabels need readable colours in light and dark.\n\n## Solution\n\nA fixed pool of 12 colours, assigned at random on create.'}]}),
+  mkIssue({n:15, title:'Add colour pool constant', parent:14, labels:['ready-for-agent'], created:t(22,9), updated:t(22,9), body:'Define the 12-colour pool.', events:[{at:t(22,9),actor:ME,type:'created'}]}),
+  mkIssue({n:16, title:'Pick colour on create_label', parent:14, labels:['ready-for-agent'], blockedBy:[15], created:t(22,9), updated:t(22,9), body:'Random pick from the pool.', events:[{at:t(22,9),actor:ME,type:'created'},{at:t(22,9),actor:ME,type:'blocker added',detail:'#15'}]}),
+  mkIssue({n:17, title:'Contrast-check label text colour', parent:14, labels:['enhancement','needs-info'], created:t(22,10), updated:t(22,10), body:'Black or white text depending on luminance?', events:[{at:t(22,10),actor:ME,type:'created'}]}),
+  mkIssue({n:18, title:'Old: YAML config', state:'closed', labels:['enhancement','wontfix'], created:t(19,9), updated:t(19,12), body:'Use YAML for config.',
+    comments:[{author:ME, at:t(19,12), body:'Not doing this: config shape is still fog on the map.'}], events:[{at:t(19,9),actor:ME,type:'created'},{at:t(19,12),actor:ME,type:'labelled',detail:'wontfix'},{at:t(19,12),actor:ME,type:'closed'}]}),
+);
+const PROJECTS = [
+  {slug:'loom', root:'~/Syncthing/code/loom', issues:loomIssues},
+  {slug:'skills', root:'~/code/skills', issues:[
+    mkIssue({n:1, title:'grilling: stop answering own questions', labels:['bug','ready-for-agent'], created:t(18,10), updated:t(21,16), body:'The grilling skill sometimes answers for the human.', events:[{at:t(18,10),actor:ME,type:'created'}]}),
+    mkIssue({n:2, kind:'map', title:'Course: agentic workflows', created:t(15,9), updated:t(17,9), body:'## Destination\n\nA course outline.\n\n## Decisions so far\n\n## Not yet specified\n\n- Exercises', events:[{at:t(15,9),actor:ME,type:'created'}]}),
+    mkIssue({n:3, title:'Which lessons first?', parent:2, labels:['wayfinder:grilling'], created:t(15,9), updated:t(15,9), body:'## Question\n\nOrder?', events:[{at:t(15,9),actor:ME,type:'created'}]}),
+  ]},
+  {slug:'dotfiles', root:'~/dotfiles', issues:[
+    mkIssue({n:1, title:'Migrate zsh plugins', state:'closed', created:t(2,9), updated:t(3,9), body:'Done.', events:[{at:t(2,9),actor:ME,type:'created'},{at:t(3,9),actor:ME,type:'closed'}]}),
+  ]},
+];
+
+// ───────────────────────── shared helpers (data only, no layout) ─────────────────────────
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const proj = slug => PROJECTS.find(p => p.slug === slug);
+const iss = (p, n) => p.issues.find(i => i.n === +n);
+const kids = (p, n) => p.issues.filter(i => i.parent === n).sort((a,b)=>a.n-b.n);
+const blockersOf = (p, i) => i.blockedBy.map(n => iss(p, n)).filter(Boolean);
+const blocksOf = (p, i) => p.issues.filter(x => x.blockedBy.includes(i.n));
+const unblocked = (p, i) => blockersOf(p, i).every(b => b.state === 'closed');
+const status = (p, i) => i.state === 'closed' ? 'closed' : i.assignee ? 'claimed' : unblocked(p, i) ? 'frontier' : 'blocked';
+const frontier = (p, n) => kids(p, n).filter(i => status(p, i) === 'frontier');
+const href = (slug, n) => `#/${slug}${n ? '/issues/' + n : ''}`;
+const lbl = name => { const c = LABELS[name] || '#ddd'; const dark = parseInt(c.slice(1,3),16)*.3+parseInt(c.slice(3,5),16)*.59+parseInt(c.slice(5,7),16)*.11 < 140;
+  return `<span class="lbl" style="background:${c};color:${dark?'#fff':'#222'}">${esc(name)}</span>`; };
+const when = s => { const d = new Date(s); return d.toLocaleDateString('en-AU',{day:'numeric',month:'short'}) + ' ' + d.toTimeString().slice(0,5); };
+const ago = s => { const h = Math.round((new Date(t(22,14)) - new Date(s)) / 36e5); return h < 1 ? 'just now' : h < 24 ? h + 'h ago' : Math.round(h/24) + 'd ago'; };
+function md(src, slug) {
+  const inline = s => esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+    .replace(/\[([^\]]+)\]\(#(\d+)\)/g, (_, txt, n) => `<a href="${href(slug, n)}">${txt}</a>`)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2">$1</a>')
+    .replace(/(^|\s)#(\d+)\b/g, (_, sp, n) => `${sp}<a href="${href(slug, n)}">#${n}</a>`);
+  let out = '', inList = false;
+  for (const line of src.split('\n')) {
+    if (/^- /.test(line)) { if (!inList) { out += '<ul>'; inList = true; } out += `<li>${inline(line.slice(2))}</li>`; continue; }
+    if (inList) { out += '</ul>'; inList = false; }
+    const h = line.match(/^(#{1,3}) (.*)/);
+    if (h) out += `<h${h[1].length+1}>${inline(h[2])}</h${h[1].length+1}>`;
+    else if (line.trim()) out += `<p>${inline(line)}</p>`;
+  }
+  return `<div class="md">${out}${inList?'</ul>':''}</div>`;
+}
+const sections = body => { const o = {}; let cur = null; for (const l of body.split('\n')) { const m = l.match(/^## (.*)/); if (m) { cur = m[1]; o[cur] = ''; } else if (cur) o[cur] += l + '\n'; } return o; };
+function diff(a, b) {
+  const A = a.split('\n'), B = b.split('\n');
+  return B.filter(l => !A.includes(l) && l.trim()).map(l => `<div style="background:#e6ffec">+ ${esc(l)}</div>`).join('') +
+         A.filter(l => !B.includes(l) && l.trim()).map(l => `<div style="background:#ffebe9">− ${esc(l)}</div>`).join('');
+}
+function route() {
+  const [path, qs] = location.hash.slice(1).split('?');
+  const parts = (path || '/').split('/').filter(Boolean);
+  const q = Object.fromEntries(new URLSearchParams(qs || ''));
+  return { slug: parts[0], n: parts[2] ? +parts[2] : null, q };
+}
+function filterIssues(p, q) {
+  return p.issues.filter(i =>
+    (q.state === 'all' || i.state === (q.state || 'open')) &&
+    (!q.label || q.label.split(',').every(l => i.labels.includes(l))) &&
+    (!q.kind || i.kind === q.kind) &&
+    (!q.assignee || (q.assignee === 'none' ? !i.assignee : q.assignee === 'any' ? !!i.assignee : i.assignee === q.assignee)) &&
+    (!q.parent || String(i.parent) === q.parent) &&
+    (!q.q || (i.title + ' ' + i.body).toLowerCase().includes(q.q.toLowerCase())));
+}
+const qhref = (slug, q) => `#/${slug}?` + new URLSearchParams(Object.entries(q).filter(([,v]) => v)).toString();
+
+// ═════════════════════════ VARIANT A: GitHub-classic ═════════════════════════
+// Top nav + breadcrumbs. Filter sidebar on lists. Detail = body + one interleaved timeline,
+// metadata in a right sidebar. Map = Destination callout, then Frontier / Claimed / Blocked lanes as lists.
+const A = {
+  name: 'GitHub-classic',
+  css: `.A-nav{background:#24292f;color:#fff;padding:10px 24px;display:flex;gap:10px;align-items:center}.A-nav a{color:#fff}.A-nav b{font-size:16px}
+  .A-wrap{max-width:1100px;margin:20px auto;padding:0 20px}.A-tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:6px}
+  .A-tbl td,.A-tbl th{padding:10px 12px;border-top:1px solid var(--line);text-align:left}.A-tbl th{background:var(--soft);font-size:12px;color:var(--mute)}
+  .A-cols{display:grid;grid-template-columns:200px 1fr;gap:20px}.A-side h4{font-size:12px;color:var(--mute);margin:14px 0 4px;text-transform:uppercase}
+  .A-side a{display:block;padding:2px 0}.A-side a.on{font-weight:700}
+  .A-row{display:flex;gap:10px;padding:10px 12px;border-top:1px solid var(--line);background:#fff}.A-row:first-child{border-top:0}
+  .A-list{border:1px solid var(--line);border-radius:6px;overflow:hidden}.A-dot{width:14px;height:14px;border-radius:50%;margin-top:3px;flex:none}
+  .A-detail{display:grid;grid-template-columns:1fr 260px;gap:24px}.A-box{background:#fff;border:1px solid var(--line);border-radius:6px;padding:12px 16px;margin-bottom:12px}
+  .A-ev{padding:4px 0 4px 18px;border-left:2px solid var(--line);margin-left:16px;font-size:12px;color:var(--mute)}
+  .A-meta h4{font-size:12px;color:var(--mute);margin:14px 0 4px;border-top:1px solid var(--line);padding-top:10px}
+  .A-pill{display:inline-block;padding:3px 10px;border-radius:14px;color:#fff;font-weight:600;font-size:12px}
+  .A-lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.A-lane{background:#fff;border:1px solid var(--line);border-radius:6px;padding:10px}
+  .A-lane h3{margin:0 0 8px;font-size:13px}.A-lane .it{padding:6px 0;border-top:1px solid var(--line)}
+  .A-dest{background:#eef1ff;border:1px solid #c9d0ff;border-radius:6px;padding:10px 16px;margin-bottom:16px}`,
+  nav(r) { const p = r.slug && proj(r.slug);
+    return `<div class="A-nav"><b>🧵 Loom</b><a href="#/">Projects</a>${p ? ` / <a href="${href(p.slug)}">${p.slug}</a>` : ''}${r.n ? ` / #${r.n}` : ''}</div>`; },
+  projects(r) {
+    return this.nav(r) + `<div class="A-wrap"><h2>Projects</h2><table class="A-tbl"><tr><th>Slug</th><th>Root</th><th>Open</th><th>Maps</th><th>Last activity</th></tr>` +
+      PROJECTS.map(p => { const open = p.issues.filter(i=>i.state==='open'); const maps = p.issues.filter(i=>i.kind==='map');
+        const last = p.issues.map(i=>i.updated).sort().pop();
+        return `<tr><td><a href="${href(p.slug)}"><b>${p.slug}</b></a></td><td><code>${p.root}</code></td><td>${open.length}</td>
+        <td>${maps.map(m=>`<a href="${href(p.slug,m.n)}">${esc(m.title)}</a>`).join(', ')||'<span class=mute>—</span>'}</td><td class="mute">${ago(last)}</td></tr>`; }).join('') + `</table></div>`;
+  },
+  list(r) {
+    const p = proj(r.slug), q = r.q, items = filterIssues(p, q);
+    const link = (k, v, txt) => `<a class="${(q[k]||'')===v?'on':''}" href="${qhref(p.slug, {...q, [k]: v})}">${txt}</a>`;
+    const labels = Object.keys(LABELS).map(l => { const cur = q.label ? q.label.split(',') : []; const on = cur.includes(l);
+      const next = on ? cur.filter(x=>x!==l) : [...cur, l];
+      return `<a class="${on?'on':''}" href="${qhref(p.slug,{...q,label:next.join(',')})}">${lbl(l)} ${p.issues.filter(i=>i.labels.includes(l)).length}</a>`; }).join('');
+    return this.nav(r) + `<div class="A-wrap"><div class="A-cols"><div class="A-side">
+      <h4>State</h4>${link('state','','Open')}${link('state','closed','Closed')}${link('state','all','All')}
+      <h4>Kind</h4>${link('kind','','Any')}${link('kind','map','Maps')}${link('kind','issue','Issues')}
+      <h4>Assignee</h4>${link('assignee','','Anyone')}${link('assignee','none','Unassigned')}${link('assignee','any','Assigned')}
+      <h4>Labels</h4>${labels}</div><div>
+      <div class="A-list">` + (items.map(i => {
+        const kc = kids(p, i.n), bl = blockersOf(p, i).filter(b=>b.state==='open');
+        return `<div class="A-row"><div class="A-dot" style="background:${i.state==='open'?'var(--open)':'var(--closed)'}"></div><div style="flex:1">
+          ${i.kind==='map'?'🗺️ ':''}<a href="${href(p.slug,i.n)}"><b>${esc(i.title)}</b></a> ${i.labels.map(lbl).join('')}
+          <div class="small mute">#${i.n} · ${i.parent?`in <a href="${href(p.slug,i.parent)}">#${i.parent}</a> · `:''}updated ${ago(i.updated)}
+          ${kc.length?` · ${kc.filter(k=>k.state==='closed').length}/${kc.length} children closed`:''}${bl.length?` · ⛔ blocked by ${bl.map(b=>'#'+b.n).join(', ')}`:''}</div></div>
+          <div class="small mute">${i.assignee?'👤 '+esc(i.assignee):''}${i.comments.length?' 💬 '+i.comments.length:''}</div></div>`; }).join('') || '<div class="A-row mute">No issues match.</div>') +
+      `</div><p class="small mute">${items.length} of ${p.issues.length} · oldest first</p></div></div></div>`;
+  },
+  timeline(p, i) {
+    const items = [...i.comments.map(c => ({at:c.at, c})), ...i.events.filter(e=>e.type!=='commented').map(e => ({at:e.at, e}))].sort((a,b)=>a.at<b.at?-1:1);
+    return items.map(x => x.c ? `<div class="A-box"><div class="small mute"><b>${esc(x.c.author)}</b> commented ${when(x.c.at)}</div>${md(x.c.body, p.slug)}</div>`
+      : `<div class="A-ev">• ${esc(x.e.actor)} <b>${x.e.type}</b> ${x.e.detail?esc(x.e.detail):''} ${x.e.prev!=null?`<details><summary>diff</summary>${diff(x.e.prev,x.e.next)}</details>`:''} · ${when(x.e.at)}</div>`).join('');
+  },
+  meta(p, i) {
+    const k = kids(p, i.n);
+    return `<div class="A-meta"><h4>Assignee</h4>${i.assignee?'👤 '+esc(i.assignee):'<span class=mute>Unclaimed</span>'}
+      <h4>Labels</h4>${i.labels.map(lbl).join('')||'<span class=mute>None</span>'}
+      <h4>Parent</h4>${i.parent?`<a href="${href(p.slug,i.parent)}">#${i.parent} ${esc(iss(p,i.parent).title)}</a>`:'<span class=mute>None</span>'}
+      <h4>Blocked by</h4>${blockersOf(p,i).map(b=>`<div>${b.state==='closed'?'✅':'⛔'} <a href="${href(p.slug,b.n)}">#${b.n} ${esc(b.title)}</a></div>`).join('')||'<span class=mute>Nothing</span>'}
+      <h4>Blocks</h4>${blocksOf(p,i).map(b=>`<div><a href="${href(p.slug,b.n)}">#${b.n} ${esc(b.title)}</a></div>`).join('')||'<span class=mute>Nothing</span>'}
+      ${k.length?`<h4>Children</h4>${k.map(c=>`<div>${c.state==='closed'?'✅':'○'} <a href="${href(p.slug,c.n)}">#${c.n} ${esc(c.title)}</a></div>`).join('')}`:''}
+      <h4>Version</h4><span class="mute">v${i.version} · created ${when(i.created)}</span></div>`;
+  },
+  head(p, i) { return `<h1 style="margin:0 0 6px">${i.kind==='map'?'🗺️ ':''}${esc(i.title)} <span class="mute">#${i.n}</span></h1>
+    <p><span class="A-pill" style="background:${i.state==='open'?'var(--open)':'var(--closed)'}">${i.state==='open'?'Open':'Closed'}</span>
+    <span class="mute"> ${esc(i.author)} opened ${when(i.created)} · ${i.comments.length} comments</span></p><hr style="border:0;border-top:1px solid var(--line)">`; },
+  detail(r) {
+    const p = proj(r.slug), i = iss(p, r.n);
+    if (i.kind === 'map') return this.map(r, p, i);
+    return this.nav(r) + `<div class="A-wrap">${this.head(p,i)}<div class="A-detail"><div><div class="A-box">${md(i.body, p.slug)}</div>${this.timeline(p,i)}</div>${this.meta(p,i)}</div></div>`;
+  },
+  map(r, p, i) {
+    const s = sections(i.body), k = kids(p, i.n);
+    const lane = (title, st, extra) => `<div class="A-lane"><h3>${title} (${k.filter(x=>status(p,x)===st).length})</h3>` +
+      k.filter(x=>status(p,x)===st).map(x => `<div class="it">${lbl(x.labels[0])}<br><a href="${href(p.slug,x.n)}">#${x.n} ${esc(x.title)}</a>${extra?extra(x):''}</div>`).join('') + '</div>';
+    return this.nav(r) + `<div class="A-wrap">${this.head(p,i)}
+      <div class="A-dest"><b>Destination</b>${md(s['Destination']||'', p.slug)}</div>
+      <div class="A-lanes">${lane('🟢 Frontier','frontier')}${lane('👤 Claimed','claimed', x=>`<div class="small mute">${esc(x.assignee)}</div>`)}
+      ${lane('⛔ Blocked','blocked', x=>`<div class="small mute">waiting on ${blockersOf(p,x).filter(b=>b.state==='open').map(b=>`<a href="${href(p.slug,b.n)}">#${b.n}</a>`).join(', ')}</div>`)}</div>
+      <div class="A-detail" style="margin-top:16px"><div><div class="A-box">${md(['Decisions so far','Not yet specified','Out of scope','Notes'].map(h=>`## ${h}\n${s[h]||''}`).join('\n'), p.slug)}</div>
+      ${this.timeline(p,i)}</div>${this.meta(p,i)}</div></div>`;
+  },
+};
+
+// ═════════════════════════ VARIANT B: Three-pane (mail client / Linear) ═════════════════════════
+// Everything on one screen: left = projects + saved views + labels, middle = compact list with
+// search & chips, right = selected issue with tabs (Overview / Comments / History). Map = kanban board.
+const B = {
+  name: 'Three-pane',
+  css: `.B{display:grid;grid-template-columns:210px 380px 1fr;height:calc(100vh - 20px)}.B>div{overflow:auto;border-right:1px solid var(--line)}
+  .B-l{background:#f0f0f4;padding:12px;font-size:13px}.B-l h5{margin:14px 0 4px;color:var(--mute);font-size:11px;text-transform:uppercase}
+  .B-l a{display:flex;justify-content:space-between;padding:3px 8px;border-radius:5px;color:var(--fg)}.B-l a.on{background:#dfe2ff}
+  .B-m{background:#fff}.B-m .bar{padding:10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
+  .B-m .bar input{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+  .B-it{display:block;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--fg)}.B-it.on{background:#eef1ff;border-left:3px solid var(--accent)}
+  .B-it:hover{background:#f7f7fb;text-decoration:none}.B-r{padding:18px 24px;background:#fff}
+  .B-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:12px 0}.B-tabs a{padding:6px 12px;color:var(--mute)}.B-tabs a.on{color:var(--fg);border-bottom:2px solid var(--accent)}
+  .B-kv{display:grid;grid-template-columns:110px 1fr;gap:4px 10px;font-size:13px;background:var(--soft);padding:10px;border-radius:6px}
+  .B-board{display:grid;grid-template-columns:repeat(4,minmax(170px,1fr));gap:10px}.B-col{background:var(--soft);border-radius:8px;padding:8px;min-height:200px}
+  .B-col h4{margin:2px 4px 8px;font-size:12px;text-transform:uppercase;color:var(--mute)}.B-card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:6px;font-size:13px;display:block;color:var(--fg)}
+  .B-feed div{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}`,
+  views: [['Open','state=open'],['Maps','kind=map'],['Needs triage','label=needs-triage'],['Ready for agent','label=ready-for-agent'],['Unassigned','assignee=none'],['Closed','state=closed']],
+  left(r) {
+    const p = r.slug && proj(r.slug), cur = location.hash.split('?')[1] || '';
+    return `<div class="B-l"><b>🧵 Loom</b><h5>Projects</h5>` + PROJECTS.map(x => `<a class="${x.slug===r.slug?'on':''}" href="${href(x.slug)}">${x.slug}<span class=mute>${x.issues.filter(i=>i.state==='open').length}</span></a>`).join('') +
+      (p ? `<h5>Views</h5>` + this.views.map(([n, qs]) => `<a class="${cur===qs?'on':''}" href="#/${p.slug}?${qs}">${n}<span class=mute>${filterIssues(p, Object.fromEntries(new URLSearchParams(qs))).length}</span></a>`).join('') +
+        `<h5>Labels</h5>` + Object.keys(LABELS).map(l => `<a href="#/${p.slug}?label=${l}&state=all">${lbl(l)}<span class=mute>${p.issues.filter(i=>i.labels.includes(l)).length}</span></a>`).join('') : '') + '</div>';
+  },
+  middle(r) {
+    const p = proj(r.slug); if (!p) return `<div class="B-m"><div class="bar"><b>Recent activity</b></div><div class="B-feed" style="padding:0 12px">` +
+      PROJECTS.flatMap(x => x.issues.flatMap(i => i.events.map(e => ({x, i, e})))).sort((a,b)=>a.e.at<b.e.at?1:-1).slice(0,25)
+        .map(({x,i,e}) => `<div><span class=mute>${ago(e.at)} · ${x.slug}</span><br>${e.type} ${e.detail?esc(e.detail):''} on <a href="${href(x.slug,i.n)}">#${i.n} ${esc(i.title)}</a></div>`).join('') + '</div></div>';
+    const q = r.q; const items = filterIssues(p, q);
+    return `<div class="B-m"><div class="bar"><input placeholder="Filter: title / body…" value="${esc(q.q||'')}" onchange="location.hash='${qhref(p.slug,{...q,q:''})}'.replace(/&?q=$/,'')+'&q='+encodeURIComponent(this.value)">
+      <div class="small mute" style="margin-top:6px">${Object.entries(q).filter(([,v])=>v).map(([k,v])=>`<code>${k}:${esc(v)}</code>`).join(' ')||'<code>state:open</code>'} · ${items.length} issues</div></div>` +
+      items.map(i => { const st = status(p, i);
+        return `<a class="B-it ${i.n===r.n?'on':''}" href="#/${p.slug}/issues/${i.n}${location.hash.includes('?')?'?'+location.hash.split('?')[1]:''}">
+        <div style="display:flex;justify-content:space-between"><span class="small mute">#${i.n}${i.parent?' ↳ #'+i.parent:''}</span><span class="small mute">${ago(i.updated)}</span></div>
+        <div>${i.kind==='map'?'🗺️ ':''}${{closed:'✓ ',claimed:'● ',blocked:'⛔ ',frontier:''}[st]}${esc(i.title)}</div><div>${i.labels.map(lbl).join('')}</div></a>`; }).join('') + '</div>';
+  },
+  right(r) {
+    const p = r.slug && proj(r.slug), i = p && r.n && iss(p, r.n);
+    if (!i) return `<div class="B-r mute" style="display:flex;align-items:center;justify-content:center">${p?'Select an issue':'Select a project'}</div>`;
+    const tab = r.q.tab || (i.kind === 'map' ? 'board' : 'overview');
+    const tabs = (i.kind==='map'?[['board','Board']]:[]).concat([['overview', i.kind==='map'?'Map document':'Overview'],['comments',`Comments ${i.comments.length}`],['history',`History ${i.events.length}`]]);
+    const base = `#/${p.slug}/issues/${i.n}?`;
+    let body = '';
+    if (tab === 'board') {
+      const k = kids(p, i.n);
+      body = `<div class="B-board">` + [['frontier','🟢 Frontier'],['claimed','👤 Claimed'],['blocked','⛔ Blocked'],['closed','✓ Decided']].map(([st, h]) =>
+        `<div class="B-col"><h4>${h} · ${k.filter(x=>status(p,x)===st).length}</h4>` + k.filter(x=>status(p,x)===st).map(x =>
+          `<a class="B-card" href="${base}tab=overview&n=${x.n}" onclick="location.hash='#/${p.slug}/issues/${x.n}';return false">${lbl(x.labels[0])}<div style="margin-top:4px">${esc(x.title)}</div>
+          <div class="small mute">#${x.n}${x.assignee?' · '+esc(x.assignee):''}${st==='blocked'?' · waits on '+blockersOf(p,x).filter(b=>b.state==='open').map(b=>'#'+b.n).join(', '):''}</div>
+          ${st==='closed'&&x.comments[0]?`<div class="small" style="margin-top:4px;color:#444">${esc(x.comments[0].body.split('\n\n')[1]||'').slice(0,110)}…</div>`:''}</a>`).join('') + '</div>').join('') + '</div>';
+    } else if (tab === 'overview') {
+      body = `<div class="B-kv"><span class=mute>State</span><span>${i.state}${i.state==='open'?' · '+status(p,i):''}</span>
+        <span class=mute>Assignee</span><span>${i.assignee?esc(i.assignee):'—'}</span><span class=mute>Labels</span><span>${i.labels.map(lbl).join('')||'—'}</span>
+        <span class=mute>Parent</span><span>${i.parent?`<a href="${href(p.slug,i.parent)}">#${i.parent} ${esc(iss(p,i.parent).title)}</a>`:'—'}</span>
+        <span class=mute>Blocked by</span><span>${blockersOf(p,i).map(b=>`<a href="${href(p.slug,b.n)}">${b.state==='closed'?'<s>#'+b.n+'</s>':'#'+b.n}</a>`).join(', ')||'—'}</span>
+        <span class=mute>Blocks</span><span>${blocksOf(p,i).map(b=>`<a href="${href(p.slug,b.n)}">#${b.n}</a>`).join(', ')||'—'}</span>
+        <span class=mute>Children</span><span>${kids(p,i.n).map(c=>`<a href="${href(p.slug,c.n)}">#${c.n}</a>`).join(', ')||'—'}</span>
+        <span class=mute>Version</span><span>v${i.version} · updated ${ago(i.updated)}</span></div>${md(i.body, p.slug)}`;
+    } else if (tab === 'comments') {
+      body = i.comments.map(c => `<div style="border-bottom:1px solid var(--line);padding:8px 0"><div class="small mute">${esc(c.author)} · ${when(c.at)}</div>${md(c.body,p.slug)}</div>`).join('') || '<p class=mute>No comments.</p>';
+    } else {
+      body = [...i.events].reverse().map(e => `<div style="padding:5px 0;border-bottom:1px solid var(--line);font-size:13px"><span class=mute>${when(e.at)}</span> · ${e.type} ${e.detail?`<code>${esc(e.detail)}</code>`:''}
+        ${e.prev!=null?`<details><summary class=small>show change</summary><div class=small>${diff(e.prev,e.next)}</div></details>`:''}</div>`).join('');
+    }
+    return `<div class="B-r"><div class="small mute">${p.slug} #${i.n} · ${i.kind}</div><h2 style="margin:4px 0">${esc(i.title)}</h2>
+      <div class="B-tabs">${tabs.map(([k,n])=>`<a class="${k===tab?'on':''}" href="${base}tab=${k}">${n}</a>`).join('')}</div>${body}</div>`;
+  },
+  render(r) { return `<div class="B">${this.left(r)}${this.middle(r)}${this.right(r)}</div>`; },
+  projects(r) { return this.render(r); }, list(r) { return this.render(r); }, detail(r) { return this.render(r); },
+};
+
+// ═════════════════════════ VARIANT C: Document + graph ═════════════════════════
+// One narrow column, almost no chrome, text-first. Projects = progress per Map. Lists = a tree
+// grouped by parent with a query-syntax filter line. Detail = key:value header, body, history with diffs.
+// Map = dependency graph (SVG, layered by blocker depth) + decisions log.
+const C = {
+  name: 'Document + graph',
+  css: `.C{max-width:860px;margin:24px auto;padding:0 20px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+  .C h1{font-size:20px;margin:6px 0}.C .crumb{color:var(--mute)}.C pre.kv{background:none;padding:0;color:#333}
+  .C .tree div{padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.C .tree .st{display:inline-block;width:18px}
+  .C .bar{display:inline-block;width:160px;height:8px;background:#e5e5ea;border-radius:4px;vertical-align:middle;overflow:hidden}.C .bar i{display:block;height:100%;background:var(--closed)}
+  .C input{font:inherit;width:100%;padding:6px;border:1px solid var(--line);border-radius:4px}.C .md{font-family:-apple-system,system-ui,sans-serif;font-size:14px}
+  .C .sec{margin-top:24px;border-top:1px dashed #ccc;padding-top:8px}.C svg text{font:11px -apple-system,system-ui,sans-serif}
+  .C .node{cursor:pointer}.C .legend span{margin-right:12px}`,
+  crumb(r) { return `<div class="crumb"><a href="#/">loom</a>${r.slug?` / <a href="${href(r.slug)}">${r.slug}</a>`:''}${r.n?` / #${r.n}`:''}</div>`; },
+  projects(r) {
+    return `<div class="C">${this.crumb(r)}<h1>projects</h1>` + PROJECTS.map(p => {
+      const maps = p.issues.filter(i=>i.kind==='map'&&i.state==='open');
+      return `<div class="sec"><a href="${href(p.slug)}"><b>${p.slug}</b></a> <span class=mute>${p.root} · ${p.issues.filter(i=>i.state==='open').length} open · active ${ago(p.issues.map(i=>i.updated).sort().pop())}</span>` +
+        maps.map(m => { const k = kids(p, m.n), c = k.filter(x=>x.state==='closed').length, f = frontier(p, m.n);
+          return `<div style="margin:6px 0 0 16px">🗺️ <a href="${href(p.slug,m.n)}">${esc(m.title)}</a> <span class="bar"><i style="width:${k.length?100*c/k.length:0}%"></i></span> ${c}/${k.length} decided
+          <div class=mute style="margin-left:22px">next: ${f.map(x=>`<a href="${href(p.slug,x.n)}">${esc(x.title)}</a>`).join(' · ')||'—'}</div></div>`; }).join('') + '</div>'; }).join('') + '</div>';
+  },
+  list(r) {
+    const p = proj(r.slug), q = r.q, items = filterIssues(p, q), set = new Set(items.map(i=>i.n));
+    const qstr = Object.entries(q).filter(([,v])=>v).map(([k,v])=>`${k}:${v}`).join(' ') || 'state:open';
+    const glyph = i => ({closed:'✓',claimed:'●',blocked:'⛔',frontier:'○'}[status(p,i)]);
+    const row = (i, depth) => `<div style="padding-left:${depth*22}px"><span class="st">${glyph(i)}</span><span class=mute>#${String(i.n).padEnd(3)}</span> ${i.kind==='map'?'🗺️ ':''}<a href="${href(p.slug,i.n)}">${esc(i.title)}</a> ${i.labels.map(lbl).join('')}${i.assignee?` <span class=mute>@${esc(i.assignee.split(' ')[0].toLowerCase())}</span>`:''}</div>`;
+    const roots = items.filter(i => !i.parent || !set.has(i.parent));
+    const tree = roots.map(i => row(i, 0) + kids(p, i.n).filter(c=>set.has(c.n)).map(c => row(c, 1)).join('')).join('');
+    return `<div class="C">${this.crumb(r)}<h1>${p.slug} <span class=mute>issues</span></h1>
+      <input value="${esc(qstr)}" title="keys: state kind label assignee parent q" onchange="location.hash='#/${p.slug}?'+this.value.trim().split(/\\s+/).map(t=>t.split(':')).filter(x=>x[1]).map(([k,...v])=>k+'='+encodeURIComponent(v.join(':'))).join('&')">
+      <div class="small mute" style="margin:4px 0 12px">try: <a href="#/${p.slug}?state=all">state:all</a> · <a href="#/${p.slug}?label=needs-triage">label:needs-triage</a> · <a href="#/${p.slug}?kind=map">kind:map</a> · <a href="#/${p.slug}?assignee=none">assignee:none</a> &nbsp; ✓ closed ● claimed ⛔ blocked ○ open</div>
+      <div class="tree">${tree || '<span class=mute>nothing matches</span>'}</div><p class=mute>${items.length} / ${p.issues.length}</p></div>`;
+  },
+  header(p, i) {
+    const kv = [['state', i.state + (i.state==='open'&&i.parent?` (${status(p,i)})`:'')], ['kind', i.kind], ['assignee', i.assignee||'—'], ['labels', i.labels.map(lbl).join('')||'—'],
+      ['parent', i.parent?`<a href="${href(p.slug,i.parent)}">#${i.parent} ${esc(iss(p,i.parent).title)}</a>`:'—'],
+      ['blocked by', blockersOf(p,i).map(b=>`<a href="${href(p.slug,b.n)}">#${b.n}</a>${b.state==='closed'?'✓':''}`).join(' ')||'—'],
+      ['blocks', blocksOf(p,i).map(b=>`<a href="${href(p.slug,b.n)}">#${b.n}</a>`).join(' ')||'—'],
+      ['version', `v${i.version}  created ${when(i.created)}  updated ${ago(i.updated)}`]];
+    return `<h1>${esc(i.title)} <span class=mute>#${i.n}</span></h1><pre class="kv">${kv.map(([k,v])=>`${k.padEnd(11)}${v}`).join('\n')}</pre>`;
+  },
+  history(p, i) {
+    return `<div class="sec"><b>comments (${i.comments.length})</b>` + i.comments.map(c => `<div style="margin:8px 0;padding-left:10px;border-left:3px solid var(--line)"><span class=mute>${esc(c.author)} ${when(c.at)}</span>${md(c.body,p.slug)}</div>`).join('') + '</div>' +
+      `<div class="sec"><b>history (${i.events.length})</b>` + i.events.map(e => `<div><span class=mute>${when(e.at)}</span> ${e.type} ${e.detail?esc(e.detail):''}${e.prev!=null?`<div style="margin:2px 0 6px 18px">${diff(e.prev,e.next)}</div>`:''}</div>`).join('') + '</div>';
+  },
+  detail(r) {
+    const p = proj(r.slug), i = iss(p, r.n);
+    if (i.kind === 'map') return this.map(r, p, i);
+    const k = kids(p, i.n);
+    return `<div class="C">${this.crumb(r)}${this.header(p,i)}<div class="sec">${md(i.body, p.slug)}</div>
+      ${k.length?`<div class="sec"><b>children</b>${k.map(c=>`<div>${c.state==='closed'?'✓':'○'} <a href="${href(p.slug,c.n)}">#${c.n} ${esc(c.title)}</a> ${c.labels.map(lbl).join('')}</div>`).join('')}</div>`:''}${this.history(p,i)}</div>`;
+  },
+  map(r, p, i) {
+    const k = kids(p, i.n), depth = {};
+    const d = x => depth[x.n] ??= Math.max(0, ...blockersOf(p, x).filter(b=>b.parent===i.n).map(b => d(b) + 1));
+    k.forEach(d);
+    const layers = []; k.forEach(x => (layers[depth[x.n]] ||= []).push(x));
+    const W = 200, H = 46, GX = 50, GY = 14, pos = {};
+    layers.forEach((L, li) => L.forEach((x, j) => pos[x.n] = {x: 10 + li*(W+GX), y: 10 + j*(H+GY)}));
+    const svgW = layers.length*(W+GX), svgH = Math.max(...layers.map(L=>L.length))*(H+GY)+10;
+    const col = {closed:['#eee','#999'], frontier:['#e6f4ea','#2e7d32'], claimed:['#e8ecff','#4b5bdc'], blocked:['#fff4e0','#b26a00']};
+    const edges = k.flatMap(x => blockersOf(p,x).filter(b=>pos[b.n]).map(b => { const a = pos[b.n], z = pos[x.n];
+      return `<path d="M${a.x+W},${a.y+H/2} C${a.x+W+25},${a.y+H/2} ${z.x-25},${z.y+H/2} ${z.x},${z.y+H/2}" fill="none" stroke="${b.state==='closed'?'#ccc':'#b26a00'}" stroke-width="1.5" marker-end="url(#ar)"/>`; })).join('');
+    const nodes = k.map(x => { const s = status(p,x), [bg, fg] = col[s], q = pos[x.n];
+      return `<a href="${href(p.slug,x.n)}" class="node"><rect x="${q.x}" y="${q.y}" width="${W}" height="${H}" rx="6" fill="${bg}" stroke="${fg}" stroke-width="${s==='frontier'?2.5:1}"/>
+        <text x="${q.x+8}" y="${q.y+17}" fill="${fg}">#${x.n} · ${x.labels[0].replace('wayfinder:','')}${x.assignee?' · @'+x.assignee.split(' ')[0].toLowerCase():''}</text>
+        <text x="${q.x+8}" y="${q.y+34}" fill="#222">${esc(x.title.length>30?x.title.slice(0,29)+'…':x.title)}</text></a>`; }).join('');
+    const s = sections(i.body);
+    return `<div class="C" style="max-width:1100px">${this.crumb(r)}<h1>🗺️ ${esc(i.title)} <span class=mute>#${i.n}</span></h1>
+      <div class="md" style="max-width:760px">${md(s['Destination']||'', p.slug)}</div>
+      <div class="sec legend"><b>route</b> &nbsp;<span style="color:#2e7d32">■ frontier</span><span style="color:#4b5bdc">■ claimed</span><span style="color:#b26a00">■ blocked</span><span style="color:#999">■ decided</span> <span class=mute>left → right by blocker depth</span></div>
+      <div style="overflow:auto"><svg width="${svgW}" height="${svgH}"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0L10,5L0,10z" fill="#999"/></marker></defs>${edges}${nodes}</svg></div>
+      <div class="sec"><b>fog · not yet specified</b>${md(s['Not yet specified']||'', p.slug)}</div>
+      <div class="sec"><b>decided</b>${k.filter(x=>x.state==='closed').map(x=>`<div style="margin:6px 0"><a href="${href(p.slug,x.n)}">#${x.n} ${esc(x.title)}</a><div class="md mute" style="margin-left:14px">${md((x.comments[0]?.body||'').split('\n\n').slice(1).join('\n'),p.slug)}</div></div>`).join('')}</div>
+      <div class="sec"><b>out of scope</b>${md(s['Out of scope']||'', p.slug)}</div>
+      <details class="sec"><summary><b>full map body + history</b></summary>${md(i.body,p.slug)}${this.history(p,i)}</details></div>`;
+  },
+};
+
+// ───────────────────────── switcher + router ─────────────────────────
+const VARIANTS = {A, B, C}, KEYS = Object.keys(VARIANTS);
+const curVariant = () => { const v = new URLSearchParams(location.search).get('variant'); return KEYS.includes(v) ? v : 'A'; };
+function setVariant(v) { const u = new URL(location); u.searchParams.set('variant', v); history.replaceState(null, '', u); render(); }
+function cycle(d) { const i = KEYS.indexOf(curVariant()); setVariant(KEYS[(i + d + KEYS.length) % KEYS.length]); }
+function render() {
+  const v = VARIANTS[curVariant()], r = route();
+  document.getElementById('vstyle').textContent = v.css;
+  const page = !r.slug || !proj(r.slug) ? 'projects' : r.n && iss(proj(r.slug), r.n) ? 'detail' : 'list';
+  document.getElementById('app').innerHTML = v[page](r);
+  document.getElementById('vlabel').textContent = `${curVariant()} (${v.name})`;
+  document.getElementById('vroute').textContent = `${page} · ${location.hash || '#/'}`;
+}
+document.getElementById('prev').onclick = () => cycle(-1);
+document.getElementById('next').onclick = () => cycle(1);
+addEventListener('keydown', e => { if (e.target.closest('input,textarea,[contenteditable]')) return;
+  if (e.key === 'ArrowLeft') cycle(-1); if (e.key === 'ArrowRight') cycle(1); });
+addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
