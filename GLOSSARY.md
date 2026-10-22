@@ -16,6 +16,14 @@ _Avoid_: Repo, workspace
 The directory a Project is anchored to; work happening anywhere beneath it belongs to that Project, the deepest Root winning when Roots nest.
 _Avoid_: Path, home
 
+**Standalone**:
+A Project whose skill configuration lives in Loom rather than in files under its Root, for repos that can't carry those files.
+_Avoid_: Global, repo-less
+
+**Glossary**:
+A Standalone Project's domain glossary, held in Loom in place of a checked-in `GLOSSARY.md`; it takes precedence over any glossary the repo itself carries.
+_Avoid_: Dictionary, terms
+
 **Slug**:
 A Project's short, unique name, used wherever a Project is named rather than found by its Root.
 _Avoid_: Project name, key
