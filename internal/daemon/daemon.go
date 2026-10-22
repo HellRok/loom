@@ -21,6 +21,7 @@ import (
 	"github.com/HellRok/loom/internal/config"
 	"github.com/HellRok/loom/internal/store"
 	"github.com/HellRok/loom/internal/tools"
+	"github.com/HellRok/loom/internal/web"
 )
 
 var (
@@ -145,6 +146,7 @@ func Handler(o Options, st *store.Store) http.Handler {
 		func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: o.logger()},
 	))
+	web.Register(mux, web.Deps{Store: st, Logger: o.logger()})
 	return hostCheck(o.Config.Port, mux)
 }
 

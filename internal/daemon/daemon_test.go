@@ -48,6 +48,18 @@ func TestHealthzIdentifiesLoom(t *testing.T) {
 	}
 }
 
+func TestServesWebUIAlongsideMCP(t *testing.T) {
+	h := handler(t, 7337)
+	for path, want := range map[string]int{"/": 200, "/static/loom.css": 200, "/nope": 404, "/healthz": 200} {
+		req := httptest.NewRequest("GET", "http://127.0.0.1:7337"+path, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("GET %s: got %d, want %d", path, rec.Code, want)
+		}
+	}
+}
+
 func TestHostCheck(t *testing.T) {
 	h := handler(t, 7337)
 	for host, want := range map[string]int{

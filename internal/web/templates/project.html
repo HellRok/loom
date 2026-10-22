@@ -1,0 +1,76 @@
+{{define "main"}}<div class="panes">
+<nav class="nav" id="nav" aria-label="Project navigation">
+  <h2>Projects</h2>
+  <ul class="switcher">
+    {{range .Switcher}}<li{{if .Active}} class="active" aria-current="page"{{end}}><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-push-url="true">{{.Slug}}</a> <span class="count">{{.Open}}</span></li>{{end}}
+  </ul>
+  <h2>Views</h2>
+  <ul class="views">
+    {{range .Views}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-push-url="true">{{.Name}}</a></li>{{end}}
+  </ul>
+  <h2>Labels</h2>
+  <ul class="labels">
+    {{range .LabelLinks}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-push-url="true"><span class="label label-{{.Colour}}">{{.Name}}</span></a> <span class="count">{{.Count}}</span></li>{{end}}
+  </ul>
+</nav>
+{{template "list-pane" .}}
+{{template "issue-pane" .}}
+</div>{{end}}
+
+{{define "list-pane"}}<section class="list" id="list-pane" aria-label="Issues">
+  <form class="filter" method="get" action="/{{.Slug}}">
+    {{if ne .View "open"}}<input type="hidden" name="view" value="{{.View}}">{{end}}
+    {{range .Labels}}<input type="hidden" name="label" value="{{.}}">{{end}}
+    <input type="search" name="q" value="{{.Q}}" placeholder="Filter by title" aria-label="Filter by title">
+    <button type="submit">Filter</button>
+    {{if or .Q .Labels}}<a class="clear" href="{{.Clear}}" hx-get="{{.Clear}}" hx-target="#main" hx-push-url="true">clear</a>{{end}}
+  </form>
+  <p class="active-filters">{{len .Rows}} shown{{if .Labels}} · labels: {{range .Labels}}<span class="chip">{{.}}</span>{{end}}{{end}}{{if .Q}} · matching <span class="chip">{{.Q}}</span>{{end}}</p>
+  <ul class="rows">
+    {{range .Rows}}
+    <li class="row status-{{.Status}}{{if .Selected}} selected{{end}}" id="row-{{.Number}}">
+      <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-push-url="true">
+        <span class="num">#{{.Number}}</span>
+        {{if .Parent}}<span class="parent" title="{{.Parent.Title}}">↑#{{.Parent.Number}}</span>{{end}}
+        <span class="glyph" title="{{.Status}}">{{.Glyph}}</span>
+        <span class="title">{{.Title}}</span>
+        {{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span>{{end}}
+        <time class="updated" datetime="{{iso .UpdatedAt}}">{{ago .UpdatedAt}}</time>
+      </a>
+    </li>
+    {{else}}<li class="empty">No Issues match.</li>{{end}}
+  </ul>
+</section>{{end}}
+
+{{define "issue-pane"}}<article class="issue" id="issue-pane" aria-label="Issue">
+{{with .Issue}}
+  <header>
+    <h1><span class="num">#{{.Number}}</span> {{.Title}}</h1>
+    <ul class="tabs" role="tablist"><li role="tab" aria-selected="true" class="active">Overview</li></ul>
+  </header>
+  <dl class="props">
+    <dt>State</dt><dd class="state">{{.State}}{{if eq .Kind "map"}} (Map){{end}} · {{.Status}}</dd>
+    <dt>Assignee</dt><dd class="assignee">{{if .Assignee}}{{.Assignee}}{{else}}unassigned{{end}}</dd>
+    <dt>Labels</dt><dd class="issue-labels">{{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span> {{else}}none{{end}}</dd>
+    <dt>Parent</dt><dd class="parent">{{with .Parent}}{{template "ref" .}}{{else}}none{{end}}</dd>
+    <dt>Blocked by</dt><dd class="blockers">{{range .Blockers}}{{template "ref" .}} {{else}}none{{end}}</dd>
+    <dt>Blocks</dt><dd class="blocks">{{range .Blocks}}{{template "ref" .}} {{else}}none{{end}}</dd>
+    <dt>Children</dt><dd class="children">{{range .Children}}{{template "ref" .}} {{else}}none{{end}}</dd>
+    <dt>Version</dt><dd class="version">{{.Version}}</dd>
+  </dl>
+  <div class="body">{{.Body}}</div>
+  <section class="comments" aria-label="Discussion">
+    <h2>Discussion</h2>
+    {{range .Comments}}
+    <div class="comment" id="comment-{{.ID}}">
+      <p class="byline"><strong>{{.Author}}</strong> <a href="#comment-{{.ID}}"><time datetime="{{iso .CreatedAt}}">{{time .CreatedAt}}</time></a></p>
+      <div class="comment-body">{{.Body}}</div>
+    </div>
+    {{else}}<p class="empty">No comments yet.</p>{{end}}
+  </section>
+{{else}}
+  <p class="empty">Select an Issue to read it.</p>
+{{end}}
+</article>{{end}}
+
+{{define "ref"}}<a class="ref{{if .Closed}} closed{{end}}" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-push-url="true">{{if .Closed}}<s>#{{.Number}} {{.Title}}</s>{{else}}#{{.Number}} {{.Title}}{{end}}</a>{{end}}
