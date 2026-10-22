@@ -1,0 +1,14 @@
+{{define "main"}}<section class="session" id="session-pane">
+<h1>Session <span title="{{.Session.ID}}">{{.Holder.Short}}</span></h1>
+<p class="meta"><code class="full-id">{{.Session.ID}}</code> · <span class="idle">{{.Holder.Idle}}</span> · last seen <time datetime="{{iso .Session.LastSeen}}">{{ago .Session.LastSeen}}</time> · first seen <time datetime="{{iso .Session.FirstSeen}}">{{time .Session.FirstSeen}}</time></p>
+<h2>Holds</h2>
+<ul class="held">
+  {{range .Held}}<li><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></li>
+  {{else}}<li class="empty">Holds no Issues.</li>{{end}}
+</ul>
+<h2>Events</h2>
+<ul class="events">
+  {{range .Events}}<li><time datetime="{{iso .At}}">{{time .At}}</time> <span class="type">{{.Type}}</span> <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></li>
+  {{else}}<li class="empty">No Events.</li>{{end}}
+</ul>
+</section>{{end}}

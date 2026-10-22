@@ -80,10 +80,10 @@ type server struct {
 	broker *broker
 }
 
-// Register adds the UI's routes to mux: /, /static/, /events, /<slug>,
+// Register adds the UI's routes to mux: /, /static/, /events, /sessions, /<slug>,
 // /<slug>/events and /<slug>/issues/<n>. It claims every path no more
 // specific pattern takes, so a Project can't have the Slug "static" or
-// "events".
+// "events" or "sessions".
 //
 // It also takes over the Store's one OnChange hook to publish every write to the SSE
 // streams, so register once per Store. The returned function ends the open
@@ -124,6 +124,8 @@ func Register(mux *http.ServeMux, d Deps) (closeStreams func()) {
 			s.home(w, r)
 		case parts[0] == "static":
 			assets.ServeHTTP(w, r)
+		case parts[0] == "sessions":
+			s.sessionsRoute(w, r)
 		case len(parts) == 1:
 			s.projectPage(w, r, parts[0], 0)
 		case len(parts) == 3 && parts[1] == "issues":
@@ -156,7 +158,7 @@ func loadPages(s *server) map[string]*template.Template {
 	}
 	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"home", "project", "notfound"} {
+	for _, name := range []string{"home", "project", "notfound", "sessions", "session"} {
 		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html"))
 	}
 	return pages
@@ -399,6 +401,7 @@ type row struct {
 	Labels   []store.Label
 	URL      string
 	Selected bool
+	Holder   *HolderView // the claiming Session, if any
 }
 
 // Status is the Issue's status: closed, blocked, claimed or open.
@@ -435,6 +438,7 @@ type issueView struct {
 	Comments []commentView
 	Status   string
 	Query    string
+	Holder   *HolderView // the claiming Session, if any
 }
 
 // refLink is a Ref with the URL of its Issue page, keeping the list filters.
@@ -501,6 +505,11 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 		s.fail(w, r, err)
 		return
 	}
+	hs, err := s.holders(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var rows []row
 	for _, i := range issues {
 		if f.Q != "" && !strings.Contains(strings.ToLower(i.Title), strings.ToLower(f.Q)) {
@@ -512,7 +521,8 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 			return
 		}
 		rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked(),
-			URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected}
+			URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected,
+			Holder: hs.view(i.HolderSession)}
 		for _, name := range byIssue[i.Number] {
 			rw.Labels = append(rw.Labels, colours[name])
 		}
@@ -573,5 +583,10 @@ func (s *server) issueView(ctx context.Context, slug string, n int64, f filters,
 		iv.Comments = append(iv.Comments, commentView{Comment: c, Body: renderMarkdown(slug, c.Body)})
 	}
 	iv.Status = status(i, iv.Blocked)
+	hs, err := s.holders(ctx)
+	if err != nil {
+		return issueView{}, err
+	}
+	iv.Holder = hs.view(i.HolderSession)
 	return iv, nil
 }

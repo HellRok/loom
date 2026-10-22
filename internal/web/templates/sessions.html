@@ -1,0 +1,15 @@
+{{define "main"}}<section class="sessions" id="sessions-pane">
+<h1>Sessions</h1>
+<table class="session-list">
+  <thead><tr><th>Session</th><th>Last seen</th><th>First seen</th></tr></thead>
+  <tbody>
+  {{range .Sessions}}
+  <tr>
+    <td>{{template "holder" .HolderView}}</td>
+    <td><time datetime="{{iso .LastSeen}}">{{ago .LastSeen}}</time> <span class="muted">({{.Idle}})</span></td>
+    <td><time datetime="{{iso .FirstSeen}}">{{time .FirstSeen}}</time></td>
+  </tr>
+  {{else}}<tr class="empty"><td colspan="3">No Sessions yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</section>{{end}}

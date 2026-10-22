@@ -37,6 +37,7 @@
         {{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span>{{end}}
         <time class="updated" datetime="{{iso .UpdatedAt}}">{{ago .UpdatedAt}}</time>
       </a>
+      {{with .Holder}}<p class="held-by">held by {{template "holder" .}}</p>{{end}}
     </li>
     {{else}}<li class="empty">No Issues match.</li>{{end}}
   </ul>
@@ -51,6 +52,7 @@
   <dl class="props">
     <dt>State</dt><dd class="state">{{.State}}{{if eq .Kind "map"}} (Map){{end}} · {{.Status}}</dd>
     <dt>Assignee</dt><dd class="assignee">{{if .Assignee}}{{.Assignee}}{{else}}unassigned{{end}}</dd>
+    {{with .Holder}}<dt>Held by</dt><dd class="held-by">{{template "holder" .}}</dd>{{end}}
     <dt>Labels</dt><dd class="issue-labels">{{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span> {{else}}none{{end}}</dd>
     <dt>Parent</dt><dd class="parent">{{with .Parent}}{{template "ref" .}}{{else}}none{{end}}</dd>
     <dt>Blocked by</dt><dd class="blockers">{{range .Blockers}}{{template "ref" .}} {{else}}none{{end}}</dd>
