@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,11 +19,28 @@ import (
 type Config struct {
 	Home     string `toml:"-"`
 	Port     int    `toml:"port"`
+	Listen   string `toml:"listen"`
 	Assignee string `toml:"assignee"`
 }
 
 // DefaultPort is the port the daemon binds when config.toml sets none.
 const DefaultPort = 7337
+
+// DefaultListen is the address the daemon binds when config.toml sets none.
+const DefaultListen = "127.0.0.1"
+
+// ListenAddr is the IP the daemon binds, DefaultListen when unset.
+func (c Config) ListenAddr() string {
+	if c.Listen == "" {
+		return DefaultListen
+	}
+	return c.Listen
+}
+
+// Loopback reports whether the daemon is reachable only from this machine.
+func (c Config) Loopback() bool {
+	return net.ParseIP(c.ListenAddr()).IsLoopback()
+}
 
 // Home returns the Loom home: $LOOM_HOME, else ~/.loom.
 func Home() (string, error) {
@@ -45,13 +63,19 @@ func Load(ctx context.Context, home string) (Config, error) {
 		return Config{}, fmt.Errorf("reading %s: %w", path, err)
 	}
 	if keys := md.Undecoded(); len(keys) > 0 {
-		return Config{}, fmt.Errorf("%s: unknown keys %v (known: port, assignee)", path, keys)
+		return Config{}, fmt.Errorf("%s: unknown keys %v (known: port, listen, assignee)", path, keys)
 	}
 	if c.Port == 0 {
 		c.Port = DefaultPort
 	}
 	if c.Port < 1 || c.Port > 65535 {
 		return Config{}, fmt.Errorf("%s: port %d is out of range", path, c.Port)
+	}
+	if c.Listen == "" {
+		c.Listen = DefaultListen
+	}
+	if net.ParseIP(c.Listen) == nil {
+		return Config{}, fmt.Errorf("%s: listen %q is not an IP address (for example 127.0.0.1 or 0.0.0.0)", path, c.Listen)
 	}
 	if c.Assignee == "" {
 		c.Assignee = defaultAssignee(ctx)

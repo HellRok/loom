@@ -1,5 +1,5 @@
 // Package daemon runs `loom serve`: it owns the Loom home's lock and
-// database and serves /mcp and /healthz on 127.0.0.1.
+// database and serves /mcp and /healthz on 127.0.0.1 (or the `listen` address).
 package daemon
 
 import (
@@ -72,7 +72,7 @@ func Run(ctx context.Context, o Options) error {
 		}
 	}()
 
-	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(o.Config.Port))
+	addr := net.JoinHostPort(o.Config.ListenAddr(), strconv.Itoa(o.Config.Port))
 	ln, err := net.Listen("tcp", addr)
 	if errors.Is(err, syscall.EADDRINUSE) {
 		return fmt.Errorf("%w: %w", ErrPortInUse, err)
@@ -88,6 +88,9 @@ func Run(ctx context.Context, o Options) error {
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 	o.logger().Info("listening", "addr", addr)
+	if !o.Config.Loopback() {
+		o.logger().Warn("listening beyond this machine: Loom has no authentication, so anyone who can reach the port can read and change every Issue", "addr", addr)
+	}
 
 	select {
 	case err := <-served:
@@ -157,13 +160,18 @@ func newHandler(o Options, st *store.Store) (http.Handler, func()) {
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: o.logger()},
 	))
 	closeStreams := web.Register(mux, web.Deps{Store: st, Graph: web.StoreGraph(st), Logger: o.logger()})
-	return hostCheck(o.Config.Port, mux), closeStreams
+	return hostCheck(o.Config, mux), closeStreams
 }
 
 // hostCheck rejects requests not addressed to 127.0.0.1:<port> or
 // localhost:<port>, so a web page can't reach the daemon by DNS rebinding.
-func hostCheck(port int, next http.Handler) http.Handler {
-	p := strconv.Itoa(port)
+// A daemon listening beyond loopback is meant to be addressed by other
+// names, so it checks nothing.
+func hostCheck(cfg config.Config, next http.Handler) http.Handler {
+	if !cfg.Loopback() {
+		return next
+	}
+	p := strconv.Itoa(cfg.Port)
 	allowed := map[string]bool{"127.0.0.1:" + p: true, "localhost:" + p: true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !allowed[r.Host] {

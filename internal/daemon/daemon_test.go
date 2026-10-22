@@ -24,13 +24,19 @@ import (
 
 func handler(t *testing.T, port int) http.Handler {
 	t.Helper()
+	return handlerFor(t, config.Config{Port: port})
+}
+
+func handlerFor(t *testing.T, cfg config.Config) http.Handler {
+	t.Helper()
 	home := t.TempDir()
 	st, err := store.Open(context.Background(), filepath.Join(home, "loom.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	return daemon.Handler(daemon.Options{Config: config.Config{Home: home, Port: port}, Version: "v9.9.9"}, st)
+	cfg.Home = home
+	return daemon.Handler(daemon.Options{Config: cfg, Version: "v9.9.9"}, st)
 }
 
 func TestHealthzIdentifiesLoom(t *testing.T) {
@@ -76,6 +82,42 @@ func TestHostCheck(t *testing.T) {
 		if rec.Code != want {
 			t.Errorf("Host %q: got %d, want %d", host, rec.Code, want)
 		}
+	}
+}
+
+func TestHostCheckIsOffWhenListeningBeyondLoopback(t *testing.T) {
+	h := handlerFor(t, config.Config{Port: 7337, Listen: "0.0.0.0"})
+	for _, host := range []string{"127.0.0.1:7337", "laptop.lan:7337", "192.168.1.5:7337"} {
+		req := httptest.NewRequest("GET", "/healthz", nil)
+		req.Host = host
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != 200 {
+			t.Errorf("Host %q: got %d, want 200", host, rec.Code)
+		}
+	}
+}
+
+func TestRunListensOnTheConfiguredAddress(t *testing.T) {
+	cfg := config.Config{Home: t.TempDir(), Port: freePort(t), Listen: "0.0.0.0", Assignee: "dev"}
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- daemon.Run(ctx, daemon.Options{Config: cfg, Version: "v1"}) }()
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/healthz", cfg.Port)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		resp, err := http.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("daemon never came up: %v", err)
+		}
+	}
+	stop()
+	if err := <-done; err != nil {
+		t.Fatalf("Run: %v", err)
 	}
 }
 
