@@ -402,7 +402,7 @@ func TestWithoutGraph(t *testing.T) {
 
 func TestStatic(t *testing.T) {
 	f := seed(t)
-	for _, path := range []string{"/static/loom.css", "/static/htmx-2.0.4.min.js", "/static/htmx-ext-sse-2.2.3.js", "/static/idiomorph-ext-0.3.0.min.js"} {
+	for _, path := range []string{"/static/loom.css", "/static/loom.js", "/static/htmx-2.0.4.min.js", "/static/htmx-ext-sse-2.2.3.js", "/static/idiomorph-ext-0.3.0.min.js"} {
 		rec, _ := f.get(path, "")
 		if rec.Code != 200 || rec.Body.Len() == 0 {
 			t.Errorf("%s: status %d, %d bytes", path, rec.Code, rec.Body.Len())

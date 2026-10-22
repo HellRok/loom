@@ -197,6 +197,12 @@ func addEvent(ctx context.Context, tx *sql.Tx, issueID int64, a Actor, at, typ s
 // mutate runs fn in a transaction on Issue n of the Project slug and
 // returns the Issue as fn left it.
 func (s *Store) mutate(ctx context.Context, slug string, n int64, what string, fn func(tx *sql.Tx, id int64, i Issue) error) (Issue, error) {
+	return s.mutateAlso(ctx, slug, n, what, nil, fn)
+}
+
+// mutateAlso is mutate for a change that also touches the Issues fn adds to
+// also: each is reported changed along with Issue n and its parents.
+func (s *Store) mutateAlso(ctx context.Context, slug string, n int64, what string, also []int64, fn func(tx *sql.Tx, id int64, i Issue) error) (Issue, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Issue{}, fmt.Errorf("%s %s#%d: %w", what, slug, n, err)
@@ -206,15 +212,26 @@ func (s *Store) mutate(ctx context.Context, slug string, n int64, what string, f
 	if err != nil {
 		return Issue{}, err
 	}
+	before, err := parentNumber(ctx, tx, id)
+	if err != nil {
+		return Issue{}, fmt.Errorf("%s %s#%d: %w", what, slug, n, err)
+	}
 	if err := fn(tx, id, i); err != nil {
 		return Issue{}, err
 	}
 	if _, i, err = issue(ctx, tx, slug, n); err != nil {
 		return Issue{}, err
 	}
+	after, err := parentNumber(ctx, tx, id)
+	if err != nil {
+		return Issue{}, fmt.Errorf("%s %s#%d: %w", what, slug, n, err)
+	}
 	if err := tx.Commit(); err != nil {
 		return Issue{}, fmt.Errorf("%s %s#%d: %w", what, slug, n, err)
 	}
+	changed := []int64{n, after, before}
+	changed = append(changed, also...)
+	s.notify(slug, changed...)
 	return i, nil
 }
 
@@ -270,9 +287,14 @@ func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, in NewIss
 	if err != nil {
 		return Issue{}, err
 	}
+	parent, err := parentNumber(ctx, tx, id)
+	if err != nil {
+		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
+	}
 	if err := tx.Commit(); err != nil {
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
 	}
+	s.notify(slug, n, parent)
 	return i, nil
 }
 
@@ -589,19 +611,24 @@ func (s *Store) DeleteIssue(ctx context.Context, slug string, n int64, a Actor) 
 	if err != nil {
 		return err
 	}
-	t := now()
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM issues WHERE parent_id = ?`, id)
+	parent, err := parentNumber(ctx, tx, id)
 	if err != nil {
 		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
 	}
-	var kids []int64
+	t := now()
+	rows, err := tx.QueryContext(ctx, `SELECT id, number FROM issues WHERE parent_id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+	}
+	var kids, kidNumbers []int64
 	for rows.Next() {
-		var k int64
-		if err := rows.Scan(&k); err != nil {
+		var k, kn int64
+		if err := rows.Scan(&k, &kn); err != nil {
 			rows.Close()
 			return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
 		}
 		kids = append(kids, k)
+		kidNumbers = append(kidNumbers, kn)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -621,5 +648,6 @@ func (s *Store) DeleteIssue(ctx context.Context, slug string, n int64, a Actor) 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
 	}
+	s.notify(slug, append([]int64{n, parent}, kidNumbers...)...)
 	return nil
 }

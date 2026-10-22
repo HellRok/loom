@@ -256,7 +256,7 @@ func (s *Store) SetParent(ctx context.Context, slug string, n, parent int64, a A
 // *SelfBlockError and one that would close a loop a *CycleError. Blockers
 // it already has are ignored.
 func (s *Store) AddBlockers(ctx context.Context, slug string, n int64, blockers []int64, a Actor) (Issue, error) {
-	return s.mutate(ctx, slug, n, "blocking", func(tx *sql.Tx, id int64, i Issue) error {
+	return s.mutateAlso(ctx, slug, n, "blocking", blockers, func(tx *sql.Tx, id int64, i Issue) error {
 		return addBlockers(ctx, tx, slug, id, n, blockers, a, now())
 	})
 }
@@ -264,7 +264,7 @@ func (s *Store) AddBlockers(ctx context.Context, slug string, n int64, blockers 
 // RemoveBlockers lifts each of blockers from Issue n, ignoring any that
 // weren't blocking it.
 func (s *Store) RemoveBlockers(ctx context.Context, slug string, n int64, blockers []int64, a Actor) (Issue, error) {
-	return s.mutate(ctx, slug, n, "unblocking", func(tx *sql.Tx, id int64, i Issue) error {
+	return s.mutateAlso(ctx, slug, n, "unblocking", blockers, func(tx *sql.Tx, id int64, i Issue) error {
 		t := now()
 		changed := false
 		for _, b := range blockers {

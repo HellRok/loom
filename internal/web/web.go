@@ -75,24 +75,43 @@ type Deps struct {
 
 type server struct {
 	Deps
-	pages map[string]*template.Template
-	now   func() time.Time
+	pages  map[string]*template.Template
+	now    func() time.Time
+	broker *broker
 }
 
-// Register adds the UI's routes to mux: /, /static/, /<slug> and
-// /<slug>/issues/<n>. It claims every path no more specific pattern takes,
-// so a Project can't have the Slug "static".
-func Register(mux *http.ServeMux, d Deps) {
+// Register adds the UI's routes to mux: /, /static/, /events, /<slug>,
+// /<slug>/events and /<slug>/issues/<n>. It claims every path no more
+// specific pattern takes, so a Project can't have the Slug "static" or
+// "events".
+//
+// It also takes over the Store's one OnChange hook to publish every write to the SSE
+// streams, so register once per Store. The returned function ends the open
+// streams, for shutdown.
+func Register(mux *http.ServeMux, d Deps) (closeStreams func()) {
 	if d.Logger == nil {
 		d.Logger = slog.New(slog.DiscardHandler)
 	}
 	s := &server{Deps: d, now: time.Now}
 	s.pages = loadPages(s)
+	s.broker = newBroker()
+	d.Store.OnChange(s.broker.publish)
 	static, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		panic(err) // the embedded tree is fixed at build time
 	}
 	assets := http.StripPrefix("/static/", staticHandler(http.FileServerFS(static)))
+	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
+		s.broker.serve(w, r, "")
+	})
+	mux.HandleFunc("GET /{slug}/events", func(w http.ResponseWriter, r *http.Request) {
+		slug := r.PathValue("slug")
+		if _, err := s.Store.ProjectBySlug(r.Context(), slug); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.broker.serve(w, r, slug)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -118,6 +137,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			s.fail(w, r, store.ErrNotFound)
 		}
 	})
+	return s.broker.close
 }
 
 // staticHandler lets browsers cache the pinned, versioned assets.
@@ -173,6 +193,8 @@ func (s *server) render(w http.ResponseWriter, r *http.Request, status int, page
 			name = "list-pane"
 		case "issue-pane":
 			name = "issue-pane"
+		case "home-pane":
+			name = "home-pane"
 		}
 	}
 	var buf bytes.Buffer

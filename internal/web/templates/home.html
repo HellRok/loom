@@ -1,15 +1,17 @@
-{{define "main"}}<section class="home">
+{{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/events">{{template "home-pane" .}}</div>{{end}}
+
+{{define "home-pane"}}<section class="home" id="home-pane" data-live hx-get="/" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
 <h1>Projects</h1>
 {{range .Projects}}{{$slug := .Slug}}
 <article class="project" id="project-{{.Slug}}">
-  <h2><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-push-url="true">{{.Slug}}</a></h2>
+  <h2><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a></h2>
   <p class="meta"><span class="root">{{.Root}}</span> · <span class="open">{{.Open}} open</span> · <span class="activity">last activity <time datetime="{{iso .LastActivity}}">{{ago .LastActivity}}</time></span></p>
   {{range .Maps}}
   <div class="map">
-    <p class="map-title"><a href="/{{$slug}}/issues/{{.Number}}" hx-get="/{{$slug}}/issues/{{.Number}}" hx-target="#main" hx-push-url="true">#{{.Number}} {{.Title}}</a></p>
+    <p class="map-title"><a href="/{{$slug}}/issues/{{.Number}}" hx-get="/{{$slug}}/issues/{{.Number}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">#{{.Number}} {{.Title}}</a></p>
     <p class="progress"><progress max="{{.Total}}" value="{{.Closed}}">{{.Percent}}%</progress> <span>{{.Closed}}/{{.Total}} done</span></p>
     {{if .Next}}<p class="next">next:
-      {{range .Next}}<a href="/{{$slug}}/issues/{{.Number}}" hx-get="/{{$slug}}/issues/{{.Number}}" hx-target="#main" hx-push-url="true">#{{.Number}} {{.Title}}</a>{{end}}
+      {{range .Next}}<a href="/{{$slug}}/issues/{{.Number}}" hx-get="/{{$slug}}/issues/{{.Number}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">#{{.Number}} {{.Title}}</a>{{end}}
     </p>{{end}}
   </div>
   {{end}}

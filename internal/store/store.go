@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -37,7 +38,8 @@ func (e *SchemaTooNewError) Error() string {
 
 // Store is an open, migrated Loom database.
 type Store struct {
-	db *sql.DB
+	db       *sql.DB
+	onChange atomic.Pointer[func(Change)]
 }
 
 // Open opens the database at path and brings its schema up to date with the

@@ -47,6 +47,7 @@ func (s *Store) CreateProject(ctx context.Context, slug, root string) (Project, 
 	if err := tx.Commit(); err != nil {
 		return Project{}, fmt.Errorf("creating project %q: %w", slug, err)
 	}
+	s.notify(slug)
 	return Project{Slug: slug, Root: root}, nil
 }
 
@@ -97,6 +98,7 @@ func (s *Store) DeleteProject(ctx context.Context, slug string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
+	s.notify(slug)
 	return nil
 }
 
@@ -130,5 +132,6 @@ func (s *Store) MoveProject(ctx context.Context, slug, root string) (Project, er
 	if err := tx.Commit(); err != nil {
 		return Project{}, fmt.Errorf("moving project %q: %w", slug, err)
 	}
+	s.notify(slug)
 	return Project{Slug: slug, Root: root}, nil
 }
