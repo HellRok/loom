@@ -105,7 +105,21 @@ type IssueFilter struct {
 	// Labels are all required; NoLabels selects Issues with none.
 	Labels   []string
 	NoLabels bool
-	Limit    int
+	// Parent selects the children of that Issue number, when above zero.
+	Parent int64
+	// Blocked selects Issues with (true) or without (false) an open Blocker.
+	Blocked *bool
+	Limit   int
+}
+
+// NewIssue is what CreateIssue makes an Issue from.
+type NewIssue struct {
+	Kind, Title, Body string
+	// Labels, Parent (zero for none) and BlockedBy are applied in the same
+	// transaction as the Issue.
+	Labels    []string
+	Parent    int64
+	BlockedBy []int64
 }
 
 // querier is what both *sql.DB and *sql.Tx offer.
@@ -192,9 +206,10 @@ func (s *Store) mutate(ctx context.Context, slug string, n int64, what string, f
 
 // CreateIssue adds an open Issue to the Project slug with the next number.
 //
-// Each of labels is applied in the same transaction; an undefined one is an
-// *UndefinedLabelError and no Issue is created.
-func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, kind, title, body string, labels []string) (Issue, error) {
+// Its parent, Labels and Blockers are applied in the same transaction, and
+// if any is refused (an *UndefinedLabelError, *InvalidTicketError,
+// *MissingIssueError and so on) no Issue is created.
+func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, in NewIssue) (Issue, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
@@ -214,7 +229,7 @@ func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, kind, tit
 	t := now()
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO issues (project_id, number, kind, title, body, state, author, created_at, updated_at, version)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`, projectID, n, kind, title, body, StateOpen, a.Name, t, t)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`, projectID, n, in.Kind, in.Title, in.Body, StateOpen, a.Name, t, t)
 	if err != nil {
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
 	}
@@ -225,11 +240,17 @@ func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, kind, tit
 	if err := addEvent(ctx, tx, id, a, t, EventCreated, nil); err != nil {
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
 	}
-	if err := applyLabels(ctx, tx, projectID, id, labels, nil, a, t); err != nil {
-		if _, ok := errors.AsType[*UndefinedLabelError](err); ok {
-			return Issue{}, err
-		}
-		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
+	if err := setParent(ctx, tx, slug, id, n, in.Parent, a, t); err != nil {
+		return Issue{}, createError(slug, err)
+	}
+	if err := addBlockers(ctx, tx, slug, id, n, in.BlockedBy, a, t); err != nil {
+		return Issue{}, createError(slug, err)
+	}
+	if err := applyLabels(ctx, tx, projectID, id, in.Labels, nil, a, t); err != nil {
+		return Issue{}, createError(slug, err)
+	}
+	if err := checkTicketRules(ctx, tx, id); err != nil {
+		return Issue{}, createError(slug, err)
 	}
 	_, i, err := issue(ctx, tx, slug, n)
 	if err != nil {
@@ -239,6 +260,22 @@ func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, kind, tit
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
 	}
 	return i, nil
+}
+
+// createError passes on the errors CreateIssue documents and wraps the rest.
+func createError(slug string, err error) error {
+	var (
+		undefined *UndefinedLabelError
+		invalid   *InvalidTicketError
+		cycle     *CycleError
+		self      *SelfBlockError
+		missing   *MissingIssueError
+	)
+	if errors.As(err, &undefined) || errors.As(err, &invalid) || errors.As(err, &cycle) ||
+		errors.As(err, &self) || errors.As(err, &missing) {
+		return err
+	}
+	return fmt.Errorf("creating issue in %s: %w", slug, err)
 }
 
 // Issue finds Issue n in the Project slug, or returns ErrNotFound.
@@ -277,6 +314,18 @@ func (s *Store) Issues(ctx context.Context, slug string, f IssueFilter) ([]Issue
 		where = append(where, `EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id
 			WHERE il.issue_id = i.id AND l.name = ?)`)
 		args = append(args, name)
+	}
+	if f.Parent > 0 {
+		where = append(where, "i.parent_id = (SELECT id FROM issues WHERE project_id = p.id AND number = ?)")
+		args = append(args, f.Parent)
+	}
+	if f.Blocked != nil {
+		not := ""
+		if !*f.Blocked {
+			not = "NOT "
+		}
+		where = append(where, not+`EXISTS (SELECT 1 FROM issue_blockers ib JOIN issues b ON b.id = ib.blocker_id
+			WHERE ib.issue_id = i.id AND b.state = 'open')`)
 	}
 	from := ` FROM issues i JOIN projects p ON p.id = i.project_id WHERE ` + strings.Join(where, " AND ")
 
@@ -475,6 +524,9 @@ func (s *Store) CloseIssue(ctx context.Context, slug string, n int64, comment st
 			if err := applyLabels(ctx, tx, pid, id, []string{LabelWontfix}, nil, a, t); err != nil {
 				return err
 			}
+			if err := checkTicketRules(ctx, tx, id); err != nil {
+				return err
+			}
 		}
 		if comment != "" {
 			if _, err := addComment(ctx, tx, id, comment, a, t); err != nil {
@@ -506,18 +558,50 @@ func setState(ctx context.Context, tx *sql.Tx, issueID int64, state, event strin
 	return addEvent(ctx, tx, issueID, a, at, event, nil)
 }
 
-// DeleteIssue hard-deletes Issue n with its comments and Events. Its number
-// is never reused.
-func (s *Store) DeleteIssue(ctx context.Context, slug string, n int64) error {
-	res, err := s.db.ExecContext(ctx, `
-		DELETE FROM issues WHERE number = ? AND project_id = (SELECT id FROM projects WHERE slug = ?)`, n, slug)
+// DeleteIssue hard-deletes Issue n with its comments, Events and blocking
+// edges; its children are left parentless, each with an Event. Its number is
+// never reused.
+func (s *Store) DeleteIssue(ctx context.Context, slug string, n int64, a Actor) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
 	}
-	if k, err := res.RowsAffected(); err != nil {
+	defer tx.Rollback()
+	id, _, err := issue(ctx, tx, slug, n)
+	if err != nil {
+		return err
+	}
+	t := now()
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM issues WHERE parent_id = ?`, id)
+	if err != nil {
 		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
-	} else if k == 0 {
-		return ErrNotFound
+	}
+	var kids []int64
+	for rows.Next() {
+		var k int64
+		if err := rows.Scan(&k); err != nil {
+			rows.Close()
+			return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		}
+		kids = append(kids, k)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+	}
+	for _, k := range kids {
+		if err := addEvent(ctx, tx, k, a, t, EventParentCleared, map[string]any{"parent": n}); err != nil {
+			return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		}
+		if err := touch(ctx, tx, k, t); err != nil {
+			return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM issues WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
 	}
 	return nil
 }

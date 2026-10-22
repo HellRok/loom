@@ -22,6 +22,7 @@ type harness struct {
 	store   *store.Store
 	client  *mcp.ClientSession
 	headers http.Header
+	dbPath  string
 }
 
 const (
@@ -31,13 +32,14 @@ const (
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "loom.db"))
+	dbPath := filepath.Join(t.TempDir(), "loom.db")
+	st, err := store.Open(context.Background(), dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { st.Close() })
 
-	h := &harness{t: t, store: st}
+	h := &harness{t: t, store: st, dbPath: dbPath}
 	srv := tools.NewServer(tools.Deps{Store: st, Port: 7337, Assignee: testAssignee})
 	srv.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {

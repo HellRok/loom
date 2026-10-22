@@ -1,5 +1,64 @@
 [
   {
+    "description": "Block an Issue on others in the same Project. Blockers it already has are ignored; self-blocks and cycles are rejected, and then nothing changes.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_by": {
+          "description": "Refs of the Blockers, in the same Project",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "blocked_by"
+      ],
+      "type": "object"
+    },
+    "name": "add_blockers",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_by": {
+          "description": "All of the Issue's Blockers after the change",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "blocked_by"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Append text to the end of the section under a Markdown heading in an Issue's body. Needs no version, so concurrent sessions can all append safely.",
     "inputSchema": {
       "additionalProperties": false,
@@ -158,6 +217,16 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "blocked_by": {
+          "description": "Refs of Issues that must close before this one can be taken, in the same Project",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "body": {
           "description": "Markdown",
           "type": "string"
@@ -175,6 +244,10 @@
             "null",
             "array"
           ]
+        },
+        "parent": {
+          "description": "The parent Issue's ref, in the same Project. A Map's children are Tickets: each needs exactly one wayfinder:\u003ctype\u003e label and no triage labels, so pass labels too",
+          "type": "string"
         },
         "project": {
           "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
@@ -500,6 +573,172 @@
     }
   },
   {
+    "description": "The open, unblocked, unassigned children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "parent": {
+          "description": "The Issue whose children to sort: a Map, or a spec",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent"
+      ],
+      "type": "object"
+    },
+    "name": "frontier",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "frontier": {
+          "description": "Open, unblocked, unassigned children in creation order",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "assignee": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "body": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "comments": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "session": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "author",
+                    "session",
+                    "created_at",
+                    "body"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "labels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "open_blockers": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "ref": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ref",
+              "title",
+              "kind",
+              "state",
+              "assignee",
+              "labels"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "parent": {
+          "type": "string"
+        },
+        "skipped": {
+          "additionalProperties": false,
+          "properties": {
+            "blocked": {
+              "description": "Open children with an open Blocker",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "claimed": {
+              "description": "Open, unblocked children somebody holds",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "required": [
+            "claimed",
+            "blocked"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "parent",
+        "frontier",
+        "skipped"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Add and/or remove labels on an Issue as one atomic step. Every label must be defined in the Project, else nothing changes and the error lists the valid ones.",
     "inputSchema": {
       "additionalProperties": false,
@@ -576,6 +815,13 @@
           "description": "none, any, or an assignee's name",
           "type": "string"
         },
+        "blocked": {
+          "description": "true: only Issues with an open Blocker; false: only those without",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "detail": {
           "description": "summary (the default), or full to include bodies and comments",
           "type": "string"
@@ -601,6 +847,10 @@
         "no_labels": {
           "description": "Only Issues with no labels",
           "type": "boolean"
+        },
+        "parent": {
+          "description": "Only the children of this Issue",
+          "type": "string"
         },
         "project": {
           "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
@@ -675,6 +925,15 @@
                 "type": "string"
               },
               "labels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "open_blockers": {
                 "items": {
                   "type": "string"
                 },
@@ -866,6 +1125,65 @@
     }
   },
   {
+    "description": "Lift Blockers from an Issue. Ones it doesn't have are ignored.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_by": {
+          "description": "Refs of the Blockers, in the same Project",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "blocked_by"
+      ],
+      "type": "object"
+    },
+    "name": "remove_blockers",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_by": {
+          "description": "All of the Issue's Blockers after the change",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "blocked_by"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Reopen a closed Issue. Reopening an open Issue changes nothing and returns already: true.",
     "inputSchema": {
       "additionalProperties": false,
@@ -906,6 +1224,58 @@
         "ref",
         "state",
         "already"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Set or clear (parent: null) an Issue's parent, in the same Project. Cycles are rejected, and so is anything that breaks the Map and Ticket rules.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "parent": {
+          "description": "The new parent's ref, or null to make the Issue parentless",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "parent"
+      ],
+      "type": "object"
+    },
+    "name": "set_parent",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "parent": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "parent"
       ],
       "type": "object"
     }
@@ -957,8 +1327,131 @@
         "author": {
           "type": "string"
         },
+        "blocked_by": {
+          "description": "Every Blocker, open or closed",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ref",
+              "title",
+              "state"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "body": {
           "type": "string"
+        },
+        "children": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "assignee": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "body": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "comments": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "session": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "author",
+                    "session",
+                    "created_at",
+                    "body"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "labels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "open_blockers": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "ref": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ref",
+              "title",
+              "kind",
+              "state",
+              "assignee",
+              "labels"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "comments": {
           "items": {
@@ -1043,6 +1536,29 @@
             "array"
           ]
         },
+        "parent": {
+          "additionalProperties": false,
+          "properties": {
+            "ref": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ref",
+            "title",
+            "state"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "project": {
           "type": "string"
         },
@@ -1078,6 +1594,9 @@
         "updated_at",
         "version",
         "labels",
+        "parent",
+        "blocked_by",
+        "children",
         "body"
       ],
       "type": "object"

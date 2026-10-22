@@ -167,7 +167,10 @@ func (s *Store) SetLabels(ctx context.Context, slug string, n int64, add, remove
 		if err != nil {
 			return err
 		}
-		return applyLabels(ctx, tx, pid, id, add, remove, a, now())
+		if err := applyLabels(ctx, tx, pid, id, add, remove, a, now()); err != nil {
+			return err
+		}
+		return checkTicketRules(ctx, tx, id)
 	})
 }
 

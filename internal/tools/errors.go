@@ -27,6 +27,9 @@ const (
 	codeNoSection       Code = "no_section"
 	codeUndefinedLabel  Code = "undefined_label"
 	codeLabelInUse      Code = "label_in_use"
+	codeInvalidTicket   Code = "invalid_ticket"
+	codeCycle           Code = "cycle"
+	codeSelfBlock       Code = "self_block"
 	codeInternal        Code = "internal"
 )
 

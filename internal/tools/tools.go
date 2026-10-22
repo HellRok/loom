@@ -117,6 +117,23 @@ func NewServer(d Deps) *mcp.Server {
 		Name:        "delete_label",
 		Description: "Delete a label no Issue carries. If Issues carry it, the error lists them.",
 	}, h.deleteLabel)
+
+	add(s, h, &mcp.Tool{
+		Name:        "frontier",
+		Description: "The open, unblocked, unassigned children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked.",
+	}, h.frontier)
+	add(s, h, &mcp.Tool{
+		Name:        "set_parent",
+		Description: "Set or clear (parent: null) an Issue's parent, in the same Project. Cycles are rejected, and so is anything that breaks the Map and Ticket rules.",
+	}, h.setParent)
+	add(s, h, &mcp.Tool{
+		Name:        "add_blockers",
+		Description: "Block an Issue on others in the same Project. Blockers it already has are ignored; self-blocks and cycles are rejected, and then nothing changes.",
+	}, h.addBlockers)
+	add(s, h, &mcp.Tool{
+		Name:        "remove_blockers",
+		Description: "Lift Blockers from an Issue. Ones it doesn't have are ignored.",
+	}, h.removeBlockers)
 	return s
 }
 

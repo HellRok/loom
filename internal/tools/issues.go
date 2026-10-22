@@ -39,6 +39,23 @@ func issueError(slug string, n int64, err error) error {
 			fmt.Sprintf("%q isn't a label in this Project. Use one of the valid labels, or define it first with create_label.", undefined.Name),
 			map[string]any{"valid": undefined.Valid})
 	}
+	if invalid, ok := errors.AsType[*store.InvalidTicketError](err); ok {
+		return fail(codeInvalidTicket, invalid.Message+" A Ticket's type is one of the valid_types, as the label wayfinder:<type>.",
+			map[string]any{"valid_types": store.WayfinderTypes})
+	}
+	if cycle, ok := errors.AsType[*store.CycleError](err); ok {
+		msg := fmt.Sprintf("#%d is already (transitively) blocked by #%d, so it can't also block it.", cycle.Other, cycle.Issue)
+		if cycle.Edge == "parent" {
+			msg = fmt.Sprintf("#%d is #%d or one of its descendants, so it can't be its parent.", cycle.Other, cycle.Issue)
+		}
+		return fail(codeCycle, msg, map[string]any{"edge": cycle.Edge})
+	}
+	if self, ok := errors.AsType[*store.SelfBlockError](err); ok {
+		return fail(codeSelfBlock, fmt.Sprintf("#%d can't block itself.", self.N), nil)
+	}
+	if missing, ok := errors.AsType[*store.MissingIssueError](err); ok {
+		return notFound(slug, missing.N)
+	}
 	if missing, ok := errors.AsType[*store.NoSectionError](err); ok {
 		return fail(codeNoSection, fmt.Sprintf("#%d has no section with that heading.", n),
 			map[string]any{"headings": missing.Headings})
@@ -92,7 +109,9 @@ type createIssueIn struct {
 	Body  string `json:"body,omitempty" jsonschema:"Markdown"`
 	Kind  string `json:"kind,omitempty" jsonschema:"issue (the default) or map; fixed once created"`
 	// Labels must all be defined in the Project.
-	Labels []string `json:"labels,omitempty" jsonschema:"Labels to apply, all defined in the Project (see list_labels)"`
+	Labels    []string `json:"labels,omitempty" jsonschema:"Labels to apply, all defined in the Project (see list_labels)"`
+	Parent    string   `json:"parent,omitempty" jsonschema:"The parent Issue's ref, in the same Project. A Map's children are Tickets: each needs exactly one wayfinder:<type> label and no triage labels, so pass labels too"`
+	BlockedBy []string `json:"blocked_by,omitempty" jsonschema:"Refs of Issues that must close before this one can be taken, in the same Project"`
 }
 
 type createIssueOut struct {
@@ -118,7 +137,16 @@ func (h *handlers) createIssue(ctx context.Context, c call, in createIssueIn) (c
 	if kind != store.KindIssue && kind != store.KindMap {
 		return createIssueOut{}, fail(codeInvalidArgument, fmt.Sprintf("`kind` must be %q or %q, not %q.", store.KindIssue, store.KindMap, kind), nil)
 	}
-	i, err := h.store.CreateIssue(ctx, p.Slug, h.actor(c), kind, in.Title, in.Body, in.Labels)
+	n := store.NewIssue{Kind: kind, Title: in.Title, Body: in.Body, Labels: in.Labels}
+	if in.Parent != "" {
+		if n.Parent, err = h.sameProjectRef(p, in.Parent, "parent"); err != nil {
+			return createIssueOut{}, err
+		}
+	}
+	if n.BlockedBy, err = h.sameProjectRefs(p, in.BlockedBy, "blocked_by"); err != nil {
+		return createIssueOut{}, err
+	}
+	i, err := h.store.CreateIssue(ctx, p.Slug, h.actor(c), n)
 	if errors.Is(err, store.ErrNotFound) {
 		return createIssueOut{}, h.unknownProject(ctx, p.Slug)
 	}
@@ -136,21 +164,25 @@ type viewIssueIn struct {
 }
 
 type viewIssueOut struct {
-	Ref       string        `json:"ref"`
-	URL       string        `json:"url"`
-	Project   string        `json:"project"`
-	Kind      string        `json:"kind"`
-	Title     string        `json:"title"`
-	State     string        `json:"state"`
-	Assignee  *string       `json:"assignee"`
-	Author    string        `json:"author"`
-	CreatedAt string        `json:"created_at"`
-	UpdatedAt string        `json:"updated_at"`
-	Version   int64         `json:"version"`
-	Labels    []string      `json:"labels"`
-	Body      string        `json:"body"`
-	Comments  *[]commentOut `json:"comments,omitempty"`
-	Events    *[]eventOut   `json:"events,omitempty"`
+	Ref       string      `json:"ref"`
+	URL       string      `json:"url"`
+	Project   string      `json:"project"`
+	Kind      string      `json:"kind"`
+	Title     string      `json:"title"`
+	State     string      `json:"state"`
+	Assignee  *string     `json:"assignee"`
+	Author    string      `json:"author"`
+	CreatedAt string      `json:"created_at"`
+	UpdatedAt string      `json:"updated_at"`
+	Version   int64       `json:"version"`
+	Labels    []string    `json:"labels"`
+	Parent    *issueLink  `json:"parent"`
+	BlockedBy []issueLink `json:"blocked_by" jsonschema:"Every Blocker, open or closed"`
+	// Children are summaries, without bodies.
+	Children []issueSummary `json:"children"`
+	Body     string         `json:"body"`
+	Comments *[]commentOut  `json:"comments,omitempty"`
+	Events   *[]eventOut    `json:"events,omitempty"`
 }
 
 func (h *handlers) viewIssue(ctx context.Context, c call, in viewIssueIn) (viewIssueOut, error) {
@@ -164,6 +196,9 @@ func (h *handlers) viewIssue(ctx context.Context, c call, in viewIssueIn) (viewI
 		CreatedAt: timestamp(i.CreatedAt), UpdatedAt: timestamp(i.UpdatedAt), Version: i.Version, Body: i.Body,
 	}
 	if out.Labels, err = h.store.IssueLabels(ctx, p.Slug, i.Number); err != nil {
+		return viewIssueOut{}, err
+	}
+	if err := h.fillRelations(ctx, p.Slug, i.Number, &out); err != nil {
 		return viewIssueOut{}, err
 	}
 	if in.Comments == nil || *in.Comments {
@@ -318,19 +353,23 @@ type listIssuesIn struct {
 	// Labels are all required.
 	Labels   []string `json:"labels,omitempty" jsonschema:"Only Issues carrying all of these labels"`
 	NoLabels bool     `json:"no_labels,omitempty" jsonschema:"Only Issues with no labels"`
+	Parent   string   `json:"parent,omitempty" jsonschema:"Only the children of this Issue"`
+	Blocked  *bool    `json:"blocked,omitempty" jsonschema:"true: only Issues with an open Blocker; false: only those without"`
 }
 
 // issueSummary is an Issue in a list: bodies and comments only with
 // detail: full.
 type issueSummary struct {
-	Ref      string        `json:"ref"`
-	Title    string        `json:"title"`
-	Kind     string        `json:"kind"`
-	State    string        `json:"state"`
-	Assignee *string       `json:"assignee"`
-	Labels   []string      `json:"labels"`
-	Body     *string       `json:"body,omitempty"`
-	Comments *[]commentOut `json:"comments,omitempty"`
+	Ref      string   `json:"ref"`
+	Title    string   `json:"title"`
+	Kind     string   `json:"kind"`
+	State    string   `json:"state"`
+	Assignee *string  `json:"assignee"`
+	Labels   []string `json:"labels"`
+	// OpenBlockers are the open Issues blocking this one, if any.
+	OpenBlockers []string      `json:"open_blockers,omitempty"`
+	Body         *string       `json:"body,omitempty"`
+	Comments     *[]commentOut `json:"comments,omitempty"`
 }
 
 type listIssuesOut struct {
@@ -345,7 +384,15 @@ func (h *handlers) listIssues(ctx context.Context, c call, in listIssuesIn) (lis
 	if err != nil {
 		return listIssuesOut{}, err
 	}
-	f := store.IssueFilter{Kind: in.Kind, Assignee: in.Assignee, Limit: in.Limit, Labels: in.Labels, NoLabels: in.NoLabels}
+	f := store.IssueFilter{Kind: in.Kind, Assignee: in.Assignee, Limit: in.Limit, Labels: in.Labels, NoLabels: in.NoLabels, Blocked: in.Blocked}
+	if in.Parent != "" {
+		if f.Parent, err = h.sameProjectRef(p, in.Parent, "parent"); err != nil {
+			return listIssuesOut{}, err
+		}
+		if _, err := h.store.Issue(ctx, p.Slug, f.Parent); err != nil {
+			return listIssuesOut{}, issueError(p.Slug, f.Parent, err)
+		}
+	}
 	if f.NoLabels && len(f.Labels) > 0 {
 		return listIssuesOut{}, fail(codeInvalidArgument, "`labels` and `no_labels` can't both be set: no Issue matches.", nil)
 	}
@@ -388,8 +435,8 @@ func (h *handlers) listIssues(ctx context.Context, c call, in listIssuesIn) (lis
 	}
 	out := listIssuesOut{Total: total, Issues: make([]issueSummary, len(is))}
 	for k, i := range is {
-		s := issueSummary{Ref: refString(i.Number), Title: i.Title, Kind: i.Kind, State: i.State, Assignee: nullable(i.Assignee)}
-		if s.Labels, err = h.store.IssueLabels(ctx, p.Slug, i.Number); err != nil {
+		s, err := h.summary(ctx, p.Slug, i)
+		if err != nil {
 			return listIssuesOut{}, err
 		}
 		if full {
@@ -422,7 +469,7 @@ func (h *handlers) deleteIssue(ctx context.Context, c call, in deleteIssueIn) (d
 	if in.Confirm != ref {
 		return deleteIssueOut{}, fail(codeConfirmMismatch, fmt.Sprintf("Pass confirm: %q to hard-delete %q with its comments and history.", ref, i.Title), nil)
 	}
-	if err := h.store.DeleteIssue(ctx, p.Slug, i.Number); err != nil {
+	if err := h.store.DeleteIssue(ctx, p.Slug, i.Number, h.actor(c)); err != nil {
 		return deleteIssueOut{}, issueError(p.Slug, i.Number, err)
 	}
 	return deleteIssueOut{Deleted: ref}, nil
