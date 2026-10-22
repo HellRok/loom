@@ -20,6 +20,11 @@ const (
 	codeSlugTaken       Code = "slug_taken"
 	codeRootTaken       Code = "root_taken"
 	codeConfirmMismatch Code = "confirm_mismatch"
+	codeBadRef          Code = "bad_ref"
+	codeNotFound        Code = "not_found"
+	codeInvalidArgument Code = "invalid_argument"
+	codeVersionConflict Code = "version_conflict"
+	codeNoSection       Code = "no_section"
 	codeInternal        Code = "internal"
 )
 

@@ -137,7 +137,10 @@ func Handler(o Options, st *store.Store) http.Handler {
 			"home":    o.Config.Home,
 		})
 	})
-	server := tools.NewServer(tools.Deps{Store: st, Version: o.Version, Logger: o.logger()})
+	server := tools.NewServer(tools.Deps{
+		Store: st, Version: o.Version, Logger: o.logger(),
+		Port: o.Config.Port, Assignee: o.Config.Assignee,
+	})
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: o.logger()},

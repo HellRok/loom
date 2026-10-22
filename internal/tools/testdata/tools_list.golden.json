@@ -1,5 +1,215 @@
 [
   {
+    "description": "Append text to the end of the section under a Markdown heading in an Issue's body. Needs no version, so concurrent sessions can all append safely.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "heading": {
+          "description": "The section's heading text, e.g. Decisions so far",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "text": {
+          "description": "Markdown to add as the section's last lines",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "heading",
+        "text"
+      ],
+      "type": "object"
+    },
+    "name": "append_to_section",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ref",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Close an Issue, optionally posting a comment in the same step. Closing a closed Issue changes nothing and returns already: true.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "comment": {
+          "description": "Markdown comment posted in the same step, e.g. the resolution",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "close",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "already": {
+          "type": "boolean"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "state",
+        "already"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Add an immutable Markdown comment to an Issue.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "Markdown",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "comment",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "comment_id": {
+          "type": "integer"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "comment_id",
+        "url"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Create an Issue, or a Map with kind: map. Returns its ref and URL.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "Markdown",
+          "type": "string"
+        },
+        "kind": {
+          "description": "issue (the default) or map; fixed once created",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "name": "create_issue",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ref",
+        "url",
+        "title",
+        "kind",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Register a Project: inside git, the main worktree's root with its folder name as the Slug; outside git, the cwd with the `slug` you pass.",
     "inputSchema": {
       "additionalProperties": false,
@@ -33,6 +243,48 @@
       "required": [
         "slug",
         "root"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Hard-delete an Issue with its comments and history. Its #N is never reused.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Must be the Issue's #N",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "confirm"
+      ],
+      "type": "object"
+    },
+    "name": "delete_issue",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "deleted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deleted"
       ],
       "type": "object"
     }
@@ -75,6 +327,194 @@
       },
       "required": [
         "deleted"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Replace an Issue's title and/or body. Pass the version you read: if the Issue changed since, the edit is refused with the current text instead of overwriting it.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The new Markdown body, replacing the old one",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "title": {
+          "description": "The new title",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "version": {
+          "description": "The version you last read; the edit is refused if the Issue has changed since",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ref",
+        "version"
+      ],
+      "type": "object"
+    },
+    "name": "edit_issue",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ref",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "List a Project's Issues, oldest first, with the total matching. Filters combine with AND.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "description": "none, any, or an assignee's name",
+          "type": "string"
+        },
+        "detail": {
+          "description": "summary (the default), or full to include bodies and comments",
+          "type": "string"
+        },
+        "kind": {
+          "description": "issue or map; both by default",
+          "type": "string"
+        },
+        "limit": {
+          "description": "At most this many Issues (default 50)",
+          "type": "integer"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "state": {
+          "description": "open (the default), closed or all",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_issues",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "issues": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "assignee": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "body": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "comments": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "author": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "integer"
+                    },
+                    "session": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "author",
+                    "session",
+                    "created_at",
+                    "body"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ref",
+              "title",
+              "kind",
+              "state",
+              "assignee"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "issues"
       ],
       "type": "object"
     }
@@ -124,6 +564,214 @@
       },
       "required": [
         "projects"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Reopen a closed Issue. Reopening an open Issue changes nothing and returns already: true.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "reopen",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "already": {
+          "type": "boolean"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "state",
+        "already"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "One Issue, open or closed, with its body and comments (and, on request, its Event history).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "comments": {
+          "description": "Include comments (default true)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "events": {
+          "description": "Include the Event history (default false)",
+          "type": "boolean"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "view_issue",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "author": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "comments": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "author": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "session": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "author",
+              "session",
+              "created_at",
+              "body"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "actor": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              },
+              "data": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "session": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "at",
+              "actor",
+              "session",
+              "type"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ref",
+        "url",
+        "project",
+        "kind",
+        "title",
+        "state",
+        "assignee",
+        "author",
+        "created_at",
+        "updated_at",
+        "version",
+        "body"
       ],
       "type": "object"
     }

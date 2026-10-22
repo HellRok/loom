@@ -18,12 +18,18 @@ type Deps struct {
 	Store   *store.Store
 	Version string
 	Logger  *slog.Logger
+	// Port is the daemon's port, for Issue URLs.
+	Port int
+	// Assignee is the configured human, the author of every change.
+	Assignee string
 }
 
 // handlers holds what every tool handler shares.
 type handlers struct {
-	store  *store.Store
-	logger *slog.Logger
+	store    *store.Store
+	logger   *slog.Logger
+	port     int
+	assignee string
 }
 
 // NewServer returns an MCP server exposing every Loom tool.
@@ -36,7 +42,7 @@ func NewServer(d Deps) *mcp.Server {
 	if version == "" {
 		version = "dev"
 	}
-	h := &handlers{store: d.Store, logger: logger}
+	h := &handlers{store: d.Store, logger: logger, port: d.Port, assignee: d.Assignee}
 	// The SDK logs every stateless request's connect and disconnect at Info.
 	sdkLogger := slog.New(minLevel{logger.Handler(), slog.LevelWarn})
 	s := mcp.NewServer(&mcp.Implementation{Name: "loom", Version: version}, &mcp.ServerOptions{Logger: sdkLogger})
@@ -53,6 +59,43 @@ func NewServer(d Deps) *mcp.Server {
 		Name:        "delete_project",
 		Description: "Hard-delete a Project and everything in it, freeing its Slug and Root.",
 	}, h.deleteProject)
+
+	add(s, h, &mcp.Tool{
+		Name:        "create_issue",
+		Description: "Create an Issue, or a Map with kind: map. Returns its ref and URL.",
+	}, h.createIssue)
+	add(s, h, &mcp.Tool{
+		Name:        "view_issue",
+		Description: "One Issue, open or closed, with its body and comments (and, on request, its Event history).",
+	}, h.viewIssue)
+	add(s, h, &mcp.Tool{
+		Name:        "list_issues",
+		Description: "List a Project's Issues, oldest first, with the total matching. Filters combine with AND.",
+	}, h.listIssues)
+	add(s, h, &mcp.Tool{
+		Name:        "edit_issue",
+		Description: "Replace an Issue's title and/or body. Pass the version you read: if the Issue changed since, the edit is refused with the current text instead of overwriting it.",
+	}, h.editIssue)
+	add(s, h, &mcp.Tool{
+		Name:        "append_to_section",
+		Description: "Append text to the end of the section under a Markdown heading in an Issue's body. Needs no version, so concurrent sessions can all append safely.",
+	}, h.appendToSection)
+	add(s, h, &mcp.Tool{
+		Name:        "comment",
+		Description: "Add an immutable Markdown comment to an Issue.",
+	}, h.comment)
+	add(s, h, &mcp.Tool{
+		Name:        "close",
+		Description: "Close an Issue, optionally posting a comment in the same step. Closing a closed Issue changes nothing and returns already: true.",
+	}, h.closeIssue)
+	add(s, h, &mcp.Tool{
+		Name:        "reopen",
+		Description: "Reopen a closed Issue. Reopening an open Issue changes nothing and returns already: true.",
+	}, h.reopenIssue)
+	add(s, h, &mcp.Tool{
+		Name:        "delete_issue",
+		Description: "Hard-delete an Issue with its comments and history. Its #N is never reused.",
+	}, h.deleteIssue)
 	return s
 }
 

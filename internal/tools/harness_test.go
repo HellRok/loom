@@ -24,7 +24,10 @@ type harness struct {
 	headers http.Header
 }
 
-const testSession = "test-session-0001"
+const (
+	testSession  = "test-session-0001"
+	testAssignee = "Tess Ter"
+)
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
@@ -35,7 +38,7 @@ func newHarness(t *testing.T) *harness {
 	t.Cleanup(func() { st.Close() })
 
 	h := &harness{t: t, store: st}
-	srv := tools.NewServer(tools.Deps{Store: st})
+	srv := tools.NewServer(tools.Deps{Store: st, Port: 7337, Assignee: testAssignee})
 	srv.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			if r, ok := req.(*mcp.CallToolRequest); ok {
