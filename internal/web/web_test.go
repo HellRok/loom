@@ -53,7 +53,7 @@ func seed(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	mk := func(kind, title, body string, labels ...string) store.Issue {
-		i, err := st.CreateIssue(ctx, "loom", actor, kind, title, body, labels)
+		i, err := st.CreateIssue(ctx, "loom", actor, store.NewIssue{Kind: kind, Title: title, Body: body, Labels: labels})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -389,7 +389,7 @@ func TestWithoutGraph(t *testing.T) {
 	}
 	defer st.Close()
 	st.CreateProject(ctx, "loom", "/code/loom")
-	st.CreateIssue(ctx, "loom", actor, store.KindMap, "A map", "", nil)
+	st.CreateIssue(ctx, "loom", actor, store.NewIssue{Kind: store.KindMap, Title: "A map"})
 	mux := http.NewServeMux()
 	web.Register(mux, web.Deps{Store: st})
 	f := &fixture{t: t, st: st, h: mux}
