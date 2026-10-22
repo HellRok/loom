@@ -1,7 +1,6 @@
 package tools_test
 
 import (
-	"database/sql"
 	"reflect"
 	"testing"
 )
@@ -205,7 +204,7 @@ func TestFrontierIsOpenUnblockedUnassignedChildrenInCreationOrder(t *testing.T) 
 	h.issue(dir, map[string]any{"title": "not a child"})
 	h.mustOK(h.call(dir, "close", map[string]any{"ref": done}))
 	claimed := h.issue(dir, map[string]any{"title": "claimed", "parent": spec})
-	h.assign(claimed)
+	h.mustOK(h.call(dir, "claim", map[string]any{"ref": claimed}))
 
 	out := h.mustOK(h.call(dir, "frontier", map[string]any{"parent": spec}))
 	if out["parent"] != spec {
@@ -238,20 +237,6 @@ func TestFrontierIsOpenUnblockedUnassignedChildrenInCreationOrder(t *testing.T) 
 	}
 	if empty := h.mustOK(h.call(dir, "frontier", map[string]any{"parent": third})); len(empty["frontier"].([]any)) != 0 {
 		t.Fatalf("a childless Issue has an empty frontier, got %v", empty)
-	}
-}
-
-// assign gives an Issue an assignee straight in the database, as claims
-// arrive in a later ticket.
-func (h *harness) assign(ref string) {
-	h.t.Helper()
-	db, err := sql.Open("sqlite", h.dbPath)
-	if err != nil {
-		h.t.Fatal(err)
-	}
-	defer db.Close()
-	if _, err := db.Exec(`UPDATE issues SET assignee = ? WHERE number = ?`, testAssignee, ref[1:]); err != nil {
-		h.t.Fatal(err)
 	}
 }
 

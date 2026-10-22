@@ -164,20 +164,23 @@ type viewIssueIn struct {
 }
 
 type viewIssueOut struct {
-	Ref       string      `json:"ref"`
-	URL       string      `json:"url"`
-	Project   string      `json:"project"`
-	Kind      string      `json:"kind"`
-	Title     string      `json:"title"`
-	State     string      `json:"state"`
-	Assignee  *string     `json:"assignee"`
-	Author    string      `json:"author"`
-	CreatedAt string      `json:"created_at"`
-	UpdatedAt string      `json:"updated_at"`
-	Version   int64       `json:"version"`
-	Labels    []string    `json:"labels"`
-	Parent    *issueLink  `json:"parent"`
-	BlockedBy []issueLink `json:"blocked_by" jsonschema:"Every Blocker, open or closed"`
+	Ref      string  `json:"ref"`
+	URL      string  `json:"url"`
+	Project  string  `json:"project"`
+	Kind     string  `json:"kind"`
+	Title    string  `json:"title"`
+	State    string  `json:"state"`
+	Assignee *string `json:"assignee"`
+	// HolderSession and ClaimedAt are set while the Issue is claimed.
+	HolderSession *string     `json:"holder_session"`
+	ClaimedAt     *string     `json:"claimed_at"`
+	Author        string      `json:"author"`
+	CreatedAt     string      `json:"created_at"`
+	UpdatedAt     string      `json:"updated_at"`
+	Version       int64       `json:"version"`
+	Labels        []string    `json:"labels"`
+	Parent        *issueLink  `json:"parent"`
+	BlockedBy     []issueLink `json:"blocked_by" jsonschema:"Every Blocker, open or closed"`
 	// Children are summaries, without bodies.
 	Children []issueSummary `json:"children"`
 	Body     string         `json:"body"`
@@ -192,7 +195,7 @@ func (h *handlers) viewIssue(ctx context.Context, c call, in viewIssueIn) (viewI
 	}
 	out := viewIssueOut{
 		Ref: refString(i.Number), URL: h.issueURL(p.Slug, i.Number), Project: p.Slug,
-		Kind: i.Kind, Title: i.Title, State: i.State, Assignee: nullable(i.Assignee), Author: i.Author,
+		Kind: i.Kind, Title: i.Title, State: i.State, Assignee: nullable(i.Assignee), HolderSession: nullable(i.HolderSession), ClaimedAt: claimedAt(i), Author: i.Author,
 		CreatedAt: timestamp(i.CreatedAt), UpdatedAt: timestamp(i.UpdatedAt), Version: i.Version, Body: i.Body,
 	}
 	if out.Labels, err = h.store.IssueLabels(ctx, p.Slug, i.Number); err != nil {
@@ -348,6 +351,7 @@ type listIssuesIn struct {
 	State    string `json:"state,omitempty" jsonschema:"open (the default), closed or all"`
 	Kind     string `json:"kind,omitempty" jsonschema:"issue or map; both by default"`
 	Assignee string `json:"assignee,omitempty" jsonschema:"none, any, or an assignee's name"`
+	HeldBy   string `json:"held_by,omitempty" jsonschema:"Only Issues claimed by this Session id, or me for your own claims"`
 	Detail   string `json:"detail,omitempty" jsonschema:"summary (the default), or full to include bodies and comments"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"At most this many Issues (default 50)"`
 	// Labels are all required.
@@ -360,12 +364,14 @@ type listIssuesIn struct {
 // issueSummary is an Issue in a list: bodies and comments only with
 // detail: full.
 type issueSummary struct {
-	Ref      string   `json:"ref"`
-	Title    string   `json:"title"`
-	Kind     string   `json:"kind"`
-	State    string   `json:"state"`
-	Assignee *string  `json:"assignee"`
-	Labels   []string `json:"labels"`
+	Ref      string  `json:"ref"`
+	Title    string  `json:"title"`
+	Kind     string  `json:"kind"`
+	State    string  `json:"state"`
+	Assignee *string `json:"assignee"`
+	// HolderSession is the Session claiming the Issue, if any.
+	HolderSession *string  `json:"holder_session"`
+	Labels        []string `json:"labels"`
 	// OpenBlockers are the open Issues blocking this one, if any.
 	OpenBlockers []string      `json:"open_blockers,omitempty"`
 	Body         *string       `json:"body,omitempty"`
@@ -384,7 +390,7 @@ func (h *handlers) listIssues(ctx context.Context, c call, in listIssuesIn) (lis
 	if err != nil {
 		return listIssuesOut{}, err
 	}
-	f := store.IssueFilter{Kind: in.Kind, Assignee: in.Assignee, Limit: in.Limit, Labels: in.Labels, NoLabels: in.NoLabels, Blocked: in.Blocked}
+	f := store.IssueFilter{Kind: in.Kind, Assignee: in.Assignee, HeldBy: in.HeldBy, Limit: in.Limit, Labels: in.Labels, NoLabels: in.NoLabels, Blocked: in.Blocked}
 	if in.Parent != "" {
 		if f.Parent, err = h.sameProjectRef(p, in.Parent, "parent"); err != nil {
 			return listIssuesOut{}, err
@@ -392,6 +398,9 @@ func (h *handlers) listIssues(ctx context.Context, c call, in listIssuesIn) (lis
 		if _, err := h.store.Issue(ctx, p.Slug, f.Parent); err != nil {
 			return listIssuesOut{}, issueError(p.Slug, f.Parent, err)
 		}
+	}
+	if f.HeldBy == "me" {
+		f.HeldBy = c.Session
 	}
 	if f.NoLabels && len(f.Labels) > 0 {
 		return listIssuesOut{}, fail(codeInvalidArgument, "`labels` and `no_labels` can't both be set: no Issue matches.", nil)

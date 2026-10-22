@@ -110,6 +110,62 @@
     }
   },
   {
+    "description": "Atomically take an open, unblocked Issue: assigns it to the configured human and records your Session as its holder. Returns already: true if your Session already holds it; refused with already_claimed (holder, holder_session, claimed_at) if another does, and for a closed or blocked Issue.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "claim",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "already": {
+          "type": "boolean"
+        },
+        "assignee": {
+          "type": "string"
+        },
+        "claimed_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "holder_session": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "assignee",
+        "holder_session",
+        "claimed_at",
+        "already"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Close an Issue, optionally posting a comment in the same step. Closing a closed Issue changes nothing and returns already: true.",
     "inputSchema": {
       "additionalProperties": false,
@@ -573,7 +629,7 @@
     }
   },
   {
-    "description": "The open, unblocked, unassigned children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked.",
+    "description": "The open, unblocked, unclaimed children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -650,6 +706,12 @@
                   "array"
                 ]
               },
+              "holder_session": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
               "kind": {
                 "type": "string"
               },
@@ -687,6 +749,7 @@
               "kind",
               "state",
               "assignee",
+              "holder_session",
               "labels"
             ],
             "type": "object"
@@ -826,6 +889,10 @@
           "description": "summary (the default), or full to include bodies and comments",
           "type": "string"
         },
+        "held_by": {
+          "description": "Only Issues claimed by this Session id, or me for your own claims",
+          "type": "string"
+        },
         "kind": {
           "description": "issue or map; both by default",
           "type": "string"
@@ -921,6 +988,12 @@
                   "array"
                 ]
               },
+              "holder_session": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
               "kind": {
                 "type": "string"
               },
@@ -958,6 +1031,7 @@
               "kind",
               "state",
               "assignee",
+              "holder_session",
               "labels"
             ],
             "type": "object"
@@ -1173,6 +1247,47 @@
       "required": [
         "slug",
         "root"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Free a claimed Issue, whichever Session holds it (the Event records who released). Releasing an unclaimed Issue changes nothing and returns already: true.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "ref": {
+          "description": "The Issue: #N, N, slug#N or its URL",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "release",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "already": {
+          "type": "boolean"
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "already"
       ],
       "type": "object"
     }
@@ -1460,6 +1575,12 @@
                   "array"
                 ]
               },
+              "holder_session": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
               "kind": {
                 "type": "string"
               },
@@ -1497,6 +1618,7 @@
               "kind",
               "state",
               "assignee",
+              "holder_session",
               "labels"
             ],
             "type": "object"
@@ -1504,6 +1626,12 @@
           "type": [
             "null",
             "array"
+          ]
+        },
+        "claimed_at": {
+          "type": [
+            "null",
+            "string"
           ]
         },
         "comments": {
@@ -1577,6 +1705,12 @@
             "array"
           ]
         },
+        "holder_session": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "kind": {
           "type": "string"
         },
@@ -1642,6 +1776,8 @@
         "title",
         "state",
         "assignee",
+        "holder_session",
+        "claimed_at",
         "author",
         "created_at",
         "updated_at",

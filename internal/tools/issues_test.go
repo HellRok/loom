@@ -367,7 +367,7 @@ func TestListIssuesFiltersOldestFirstWithTotal(t *testing.T) {
 	}
 
 	summary := h.mustOK(h.call(dir, "list_issues", map[string]any{"limit": 1}))["issues"].([]any)[0].(map[string]any)
-	want := map[string]any{"ref": "#1", "title": "one", "kind": "issue", "state": "open", "assignee": nil, "labels": []any{}}
+	want := map[string]any{"ref": "#1", "title": "one", "kind": "issue", "state": "open", "assignee": nil, "holder_session": nil, "labels": []any{}}
 	if !reflect.DeepEqual(summary, want) {
 		t.Fatalf("summary %v, want %v", summary, want)
 	}

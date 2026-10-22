@@ -54,7 +54,7 @@ func refs(is []store.Issue) []string {
 
 // summary is Issue i as listed: no body or comments.
 func (h *handlers) summary(ctx context.Context, slug string, i store.Issue) (issueSummary, error) {
-	s := issueSummary{Ref: refString(i.Number), Title: i.Title, Kind: i.Kind, State: i.State, Assignee: nullable(i.Assignee)}
+	s := issueSummary{Ref: refString(i.Number), Title: i.Title, Kind: i.Kind, State: i.State, Assignee: nullable(i.Assignee), HolderSession: nullable(i.HolderSession)}
 	var err error
 	if s.Labels, err = h.store.IssueLabels(ctx, slug, i.Number); err != nil {
 		return s, err

@@ -355,7 +355,7 @@ func (s *Store) OpenBlockers(ctx context.Context, slug string, n int64) ([]Issue
 // Frontier is the open children of an Issue, sorted into those ready to take
 // and those skipped.
 type Frontier struct {
-	// Ready are the unblocked, unassigned children, in creation order.
+	// Ready are the unblocked, unclaimed children, in creation order.
 	Ready []Issue
 	// Claimed are the unblocked children somebody holds.
 	Claimed []Issue
@@ -385,7 +385,7 @@ func (s *Store) Frontier(ctx context.Context, slug string, parent int64) (Fronti
 		switch {
 		case len(open) > 0:
 			f.Blocked = append(f.Blocked, k)
-		case k.Assignee != "":
+		case k.Claimed():
 			f.Claimed = append(f.Claimed, k)
 		default:
 			f.Ready = append(f.Ready, k)

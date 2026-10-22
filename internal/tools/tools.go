@@ -122,7 +122,7 @@ func NewServer(d Deps) *mcp.Server {
 
 	add(s, h, &mcp.Tool{
 		Name:        "frontier",
-		Description: "The open, unblocked, unassigned children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked.",
+		Description: "The open, unblocked, unclaimed children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked.",
 	}, h.frontier)
 	add(s, h, &mcp.Tool{
 		Name:        "set_parent",
@@ -136,6 +136,14 @@ func NewServer(d Deps) *mcp.Server {
 		Name:        "remove_blockers",
 		Description: "Lift Blockers from an Issue. Ones it doesn't have are ignored.",
 	}, h.removeBlockers)
+	add(s, h, &mcp.Tool{
+		Name:        "claim",
+		Description: "Atomically take an open, unblocked Issue: assigns it to the configured human and records your Session as its holder. Returns already: true if your Session already holds it; refused with already_claimed (holder, holder_session, claimed_at) if another does, and for a closed or blocked Issue.",
+	}, h.claim)
+	add(s, h, &mcp.Tool{
+		Name:        "release",
+		Description: "Free a claimed Issue, whichever Session holds it (the Event records who released). Releasing an unclaimed Issue changes nothing and returns already: true.",
+	}, h.release)
 	add(s, h, &mcp.Tool{
 		Name:        "list_sessions",
 		Description: "Every agent Session Loom has recorded, with when it was first and last seen. Calls from `loom` subcommands aren't recorded.",

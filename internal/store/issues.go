@@ -28,15 +28,19 @@ type Actor struct {
 
 // Issue is one tracked piece of work or decision in a Project.
 type Issue struct {
-	Number    int64
-	Kind      string
-	Title     string
-	Body      string
-	State     string
-	Author    string
-	Assignee  string // empty when unassigned
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Number   int64
+	Kind     string
+	Title    string
+	Body     string
+	State    string
+	Author   string
+	Assignee string // empty when unassigned
+	// HolderSession and ClaimedAt record the Claim; empty and zero when
+	// the Issue is unclaimed.
+	HolderSession string
+	ClaimedAt     time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 	// Version counts edits to the title and body.
 	Version int64
 }
@@ -70,6 +74,8 @@ const (
 	EventReopened    = "reopened"
 	EventLabelled    = "labelled"
 	EventUnlabelled  = "unlabelled"
+	EventClaimed     = "claimed"
+	EventReleased    = "released"
 )
 
 // VersionConflictError reports an edit based on a stale version.
@@ -102,6 +108,8 @@ type IssueFilter struct {
 	Kind  string
 	// Assignee is AssigneeNone, AssigneeAny or a name.
 	Assignee string
+	// HeldBy selects the Issues claimed by that Session.
+	HeldBy string
 	// Labels are all required; NoLabels selects Issues with none.
 	Labels   []string
 	NoLabels bool
@@ -129,18 +137,24 @@ type querier interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-const issueCols = `i.id, i.number, i.kind, i.title, i.body, i.state, i.author, i.assignee, i.created_at, i.updated_at, i.version`
+const issueCols = `i.id, i.number, i.kind, i.title, i.body, i.state, i.author, i.assignee, i.holder_session, i.claimed_at, i.created_at, i.updated_at, i.version`
 
 type scanner interface{ Scan(...any) error }
 
 func scanIssue(r scanner) (id int64, i Issue, err error) {
-	var assignee sql.NullString
+	var assignee, holder, claimed sql.NullString
 	var created, updated string
-	err = r.Scan(&id, &i.Number, &i.Kind, &i.Title, &i.Body, &i.State, &i.Author, &assignee, &created, &updated, &i.Version)
+	err = r.Scan(&id, &i.Number, &i.Kind, &i.Title, &i.Body, &i.State, &i.Author, &assignee, &holder, &claimed, &created, &updated, &i.Version)
 	if err != nil {
 		return 0, Issue{}, err
 	}
 	i.Assignee = assignee.String
+	i.HolderSession = holder.String
+	if claimed.Valid {
+		if i.ClaimedAt, err = parseTime(claimed.String); err != nil {
+			return 0, Issue{}, err
+		}
+	}
 	if i.CreatedAt, err = parseTime(created); err != nil {
 		return 0, Issue{}, err
 	}
@@ -306,6 +320,10 @@ func (s *Store) Issues(ctx context.Context, slug string, f IssueFilter) ([]Issue
 	default:
 		where = append(where, "i.assignee = ?")
 		args = append(args, f.Assignee)
+	}
+	if f.HeldBy != "" {
+		where = append(where, "i.holder_session = ?")
+		args = append(args, f.HeldBy)
 	}
 	if f.NoLabels {
 		where = append(where, "NOT EXISTS (SELECT 1 FROM issue_labels il WHERE il.issue_id = i.id)")
