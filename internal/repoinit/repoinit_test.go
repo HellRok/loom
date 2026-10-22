@@ -135,6 +135,37 @@ func TestWriteTrackerDocOverwritesAndReportsChange(t *testing.T) {
 	}
 }
 
+func TestTrackerDocIsUnchangedByHowItIsAssembled(t *testing.T) {
+	golden, err := os.ReadFile("testdata/issue-tracker-loom.golden.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repoinit.TrackerDoc != string(golden) {
+		t.Error("tracker doc differs from testdata/issue-tracker-loom.golden.md")
+	}
+}
+
+func TestConventionsOmitTheDocOnlyParts(t *testing.T) {
+	for _, want := range []string{
+		"## Conventions",
+		"do not retry blindly",
+		"## Wayfinding operations",
+	} {
+		if !strings.Contains(repoinit.Conventions, want) {
+			t.Errorf("conventions lack %q", want)
+		}
+	}
+	for _, doc := range []string{
+		"Written by `loom init`",
+		"Register the server once per machine",
+		"# Issue tracker: Loom",
+	} {
+		if strings.Contains(repoinit.Conventions, doc) {
+			t.Errorf("conventions carry the doc-only %q", doc)
+		}
+	}
+}
+
 func TestTrackerDocCarriesTheRequiredGuidance(t *testing.T) {
 	for _, want := range []string{
 		"Written by `loom init`",

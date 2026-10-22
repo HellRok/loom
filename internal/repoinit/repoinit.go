@@ -12,10 +12,29 @@ import (
 	"strings"
 )
 
-// TrackerDoc is the Loom tracker doc installed as docs/agents/issue-tracker.md.
+// Conventions is everything the tracker doc tells an agent about using Loom
+// as the issue tracker, without the parts that only make sense in a doc
+// written into a repo. The tracker doc and the MCP instructions are both
+// built from it. Its first paragraph is the introduction; the rest follows
+// the doc's registration paragraph.
 //
-//go:embed issue-tracker-loom.md
-var TrackerDoc string
+//go:embed conventions.md
+var Conventions string
+
+const (
+	docTitle = "# Issue tracker: Loom\n\n" +
+		"> Written by `loom init`. Re-running `/setup-matt-pocock-skills` will overwrite this; run `loom init` again afterwards."
+
+	docRegistration = "Register the server once per machine in your agent harness: a stdio MCP server named `loom`, command `loom mcp`. The Project is found from the working directory; if a call reports no Project, create one with `create_project`."
+)
+
+// TrackerDoc is the Loom tracker doc installed as docs/agents/issue-tracker.md.
+var TrackerDoc = trackerDoc()
+
+func trackerDoc() string {
+	intro, rest, _ := strings.Cut(Conventions, "\n\n")
+	return docTitle + "\n\n" + intro + "\n\n" + docRegistration + "\n\n" + rest
+}
 
 // TrackerDocPath is the tracker doc's path, relative to the repo root.
 const TrackerDocPath = "docs/agents/issue-tracker.md"

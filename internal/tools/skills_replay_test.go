@@ -9,7 +9,7 @@ import (
 
 // Skill replay tests: each skill's tracker operations, in the order the
 // operations inventory (research/skill-operations-inventory) lists them,
-// mapped to tools as internal/repoinit/issue-tracker-loom.md maps them. Every
+// mapped to tools as internal/repoinit/conventions.md maps them. Every
 // step asserts the output carries what the skill needs for its next step.
 
 // replay is the state a skill carries between steps: the values (refs,
