@@ -26,6 +26,9 @@ const (
 type Shim struct {
 	Target
 	session string
+	// Cwd is the working directory sent with every call; empty means the
+	// process's own. `loom project mv <slug> <dir>` sets it to <dir>.
+	Cwd string
 	// spawn starts `loom serve` and returns a channel that yields its exit.
 	spawn func(context.Context) (<-chan error, error)
 }
@@ -64,6 +67,23 @@ func (s *Shim) Server() *mcp.Server {
 		}
 	})
 	return srv
+}
+
+// Call makes one tool call for a CLI command, starting the daemon if needed.
+// A tool error comes back as the result with IsError set.
+func (s *Shim) Call(ctx context.Context, name string, args map[string]any) (*mcp.CallToolResult, error) {
+	if err := s.ensure(ctx); err != nil {
+		return nil, fmt.Errorf("loom daemon unavailable: %w; see %s", err, s.LogPath())
+	}
+	return s.forward(ctx, &mcp.CallToolParamsRaw{Name: name, Arguments: mustMarshal(args)})
+}
+
+func mustMarshal(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 func (s *Shim) listTools(ctx context.Context, p *mcp.ListToolsParams) (*mcp.ListToolsResult, error) {
@@ -114,19 +134,23 @@ func (s *Shim) connect(ctx context.Context) (*mcp.ClientSession, error) {
 	client := mcp.NewClient(&mcp.Implementation{Name: "loom-mcp", Version: s.Version}, nil)
 	return client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint:             s.baseURL() + "/mcp",
-		HTTPClient:           &http.Client{Transport: loomHeaders{session: s.session}},
+		HTTPClient:           &http.Client{Transport: loomHeaders{session: s.session, cwd: s.Cwd}},
 		MaxRetries:           -1,
 		DisableStandaloneSSE: true,
 	}, nil)
 }
 
 // loomHeaders sends the Session and the agent's raw cwd on every request.
-type loomHeaders struct{ session string }
+type loomHeaders struct{ session, cwd string }
 
 func (h loomHeaders) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
 	r.Header.Set("X-Loom-Session", h.session)
-	if cwd, err := os.Getwd(); err == nil {
+	cwd := h.cwd
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	if cwd != "" {
 		r.Header.Set("X-Loom-Cwd", cwd)
 	}
 	return http.DefaultTransport.RoundTrip(r)

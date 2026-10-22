@@ -59,6 +59,10 @@ func NewServer(d Deps) *mcp.Server {
 		Name:        "delete_project",
 		Description: "Hard-delete a Project and everything in it, freeing its Slug and Root.",
 	}, h.deleteProject)
+	add(s, h, &mcp.Tool{
+		Name:        "move_project",
+		Description: "Rebind a Project's Root to your working directory (the git root, or the cwd outside git) after its repo moved, keeping its Slug and Issues. Pass `project`. Prefer this over create_project when no_project flags a Project as root_missing.",
+	}, h.moveProject)
 
 	add(s, h, &mcp.Tool{
 		Name:        "create_issue",

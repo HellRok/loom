@@ -91,3 +91,36 @@ func (s *Store) DeleteProject(ctx context.Context, slug string) error {
 	}
 	return nil
 }
+
+// MoveProject rebinds a Project's Root, leaving its Slug and everything in it
+// alone. Another Project's Root is refused with ErrRootTaken; the Project's
+// own Root is a no-op.
+func (s *Store) MoveProject(ctx context.Context, slug, root string) (Project, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Project{}, fmt.Errorf("moving project %q: %w", slug, err)
+	}
+	defer tx.Rollback()
+
+	var holder string
+	err = tx.QueryRowContext(ctx, `SELECT slug FROM projects WHERE root = ?`, root).Scan(&holder)
+	switch {
+	case err == nil && holder != slug:
+		return Project{}, ErrRootTaken
+	case err != nil && !errors.Is(err, sql.ErrNoRows):
+		return Project{}, fmt.Errorf("moving project %q: %w", slug, err)
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE projects SET root = ? WHERE slug = ?`, root, slug)
+	if err != nil {
+		return Project{}, fmt.Errorf("moving project %q: %w", slug, err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return Project{}, fmt.Errorf("moving project %q: %w", slug, err)
+	} else if n == 0 {
+		return Project{}, ErrNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return Project{}, fmt.Errorf("moving project %q: %w", slug, err)
+	}
+	return Project{Slug: slug, Root: root}, nil
+}
