@@ -45,6 +45,11 @@ func (h *handlers) createProject(ctx context.Context, c call, in createProjectIn
 		return projectOut{}, fail(codeNoCwd, "create_project registers the caller's working directory, but none was sent (X-Loom-Cwd). Use `loom mcp`, or send the header.", nil)
 	}
 	root, inGit := c.location(ctx)
+	// An existing Project here wins over every Slug complaint, so callers
+	// can tell "already set up" from "needs a Slug".
+	if err := h.rootTaken(ctx, root); err != nil {
+		return projectOut{}, err
+	}
 	slug := in.Slug
 	if slug == "" {
 		if !inGit {
@@ -64,12 +69,32 @@ func (h *handlers) createProject(ctx context.Context, c call, in createProjectIn
 		}
 		return projectOut{}, fail(codeSlugTaken, fmt.Sprintf("Slug %q is already used by the Project at %s. Pass a different `slug`.", slug, taken.Root), nil)
 	case errors.Is(err, store.ErrRootTaken):
+		// Lost a race with another create_project at this Root.
+		if err := h.rootTaken(ctx, root); err != nil {
+			return projectOut{}, err
+		}
 		return projectOut{}, h.projectError(ctx, codeRootTaken, fmt.Sprintf("%s is already a Project's Root.", root))
 	case err == nil:
 		return toProjectOut(p), nil
 	default:
 		return projectOut{}, err
 	}
+}
+
+// rootTaken returns a root_taken error, naming the Project's `slug` and
+// listing every Project, if one already has root as its Root; else nil.
+func (h *handlers) rootTaken(ctx context.Context, root string) error {
+	ps, err := h.store.Projects(ctx)
+	if err != nil {
+		return err
+	}
+	for _, p := range ps {
+		if p.Root == root {
+			return fail(codeRootTaken, fmt.Sprintf("%s is already a Project's Root.", root),
+				map[string]any{"slug": p.Slug, "projects": toProjectOuts(ps)})
+		}
+	}
+	return nil
 }
 
 // suggestSlug turns a folder name into a valid Slug.
