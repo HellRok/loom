@@ -68,7 +68,33 @@ progress { width: 10rem; vertical-align: middle; }
 .body table, .comment-body table { border-collapse: collapse; }
 .body th, .body td, .comment-body th, .comment-body td { border: 1px solid var(--line); padding: 0.2rem 0.5rem; }
 
+.tabs a { color: inherit; text-decoration: none; }
+.board { display: grid; grid-template-columns: repeat(3, minmax(10rem, 1fr)); gap: 0.75rem; }
+.column { background: var(--panel); border-radius: 8px; padding: 0.5rem; min-width: 0; }
+.column h2 { margin: 0.1rem 0.25rem 0.5rem; font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
+.card { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.5rem; margin-bottom: 0.4rem; }
+.card a { display: block; color: var(--fg); }
+.card .title { display: block; margin: 0.2rem 0; }
+.card .num, .decision .num, .card .assignee, .card .blockers { color: var(--muted); font-size: 0.85em; }
+.card .assignee { margin-right: 0.5rem; }
+.type { color: var(--accent); }
+.decision { border-bottom: 1px solid var(--line); padding: 0.4rem 0; }
+.decision .gist { margin: 0.2rem 0 0 1rem; color: var(--muted); }
+.history { list-style: none; margin: 0; padding: 0; }
+.event { border-bottom: 1px solid var(--line); padding: 0.4rem 0; }
+.event .what { margin: 0; }
+.event .session, .event time { color: var(--muted); font-size: 0.85em; }
+.diff { font-family: ui-monospace, monospace; font-size: 0.85em; margin-top: 0.4rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff del, .diff ins { display: block; text-decoration: none; }
+.diff del::before { content: "- "; }
+.diff ins::before { content: "+ "; }
+.diff del { background: color-mix(in srgb, var(--red) 18%, transparent); }
+.diff ins { background: color-mix(in srgb, var(--green) 18%, transparent); }
+.diff .same { color: var(--muted); }
+.diff .same::before { content: "  "; }
+
 @media (max-width: 54rem) {
+  .board { grid-template-columns: 1fr; }
   .panes { display: block; }
   .panes > * { border-right: 0; border-bottom: 1px solid var(--line); }
 }

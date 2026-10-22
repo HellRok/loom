@@ -42,12 +42,13 @@
   </ul>
 </section>{{end}}
 
-{{define "issue-pane"}}<article class="issue" id="issue-pane" aria-label="Issue"{{with .Issue}} data-live hx-get="/{{.Slug}}/issues/{{.Number}}" hx-trigger="sse:issue-{{.Number}}, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML"{{end}}>
+{{define "issue-pane"}}<article class="issue" id="issue-pane" aria-label="Issue"{{with .Issue}} data-live hx-get="{{.Self}}" hx-trigger="sse:issue-{{.Number}}, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML"{{end}}>
 {{with .Issue}}
   <header>
     <h1><span class="num">#{{.Number}}</span> {{.Title}}</h1>
-    <ul class="tabs" role="tablist"><li role="tab" aria-selected="true" class="active">Overview</li></ul>
+    <ul class="tabs" role="tablist">{{range .Tabs}}<li role="tab" aria-selected="{{.Active}}"{{if .Active}} class="active"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true">{{.Name}}</a></li>{{end}}</ul>
   </header>
+  {{if eq .Tab "board"}}{{template "board" .}}{{else if eq .Tab "decided"}}{{template "decided" .}}{{else if eq .Tab "history"}}{{template "history" .}}{{else}}
   <dl class="props">
     <dt>State</dt><dd class="state">{{.State}}{{if eq .Kind "map"}} (Map){{end}} · {{.Status}}</dd>
     <dt>Assignee</dt><dd class="assignee">{{if .Assignee}}{{.Assignee}}{{else}}unassigned{{end}}</dd>
@@ -68,6 +69,7 @@
     </div>
     {{else}}<p class="empty">No comments yet.</p>{{end}}
   </section>
+  {{end}}
 {{else}}
   <p class="empty">Select an Issue to read it.</p>
 {{end}}

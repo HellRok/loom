@@ -156,7 +156,7 @@ func newHandler(o Options, st *store.Store) (http.Handler, func()) {
 		func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, Logger: o.logger()},
 	))
-	closeStreams := web.Register(mux, web.Deps{Store: st, Logger: o.logger()})
+	closeStreams := web.Register(mux, web.Deps{Store: st, Graph: web.StoreGraph(st), Logger: o.logger()})
 	return hostCheck(o.Config.Port, mux), closeStreams
 }
 

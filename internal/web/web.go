@@ -150,14 +150,16 @@ func staticHandler(next http.Handler) http.Handler {
 
 func loadPages(s *server) map[string]*template.Template {
 	funcs := template.FuncMap{
-		"ago":  s.ago,
-		"time": func(t time.Time) string { return t.Local().Format("2006-01-02 15:04") },
-		"iso":  func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
+		"ago":          s.ago,
+		"time":         func(t time.Time) string { return t.Local().Format("2006-01-02 15:04") },
+		"colData":      func(key, name string, cards []card) column { return column{key, name, cards} },
+		"shortSession": shortSession,
+		"iso":          func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 	}
 	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	pages := map[string]*template.Template{}
 	for _, name := range []string{"home", "project", "notfound"} {
-		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html"))
+		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html", "templates/tabs.html"))
 	}
 	return pages
 }
@@ -435,6 +437,12 @@ type issueView struct {
 	Comments []commentView
 	Status   string
 	Query    string
+	Tab      string // overview, history, and for a Map board and decided
+	Tabs     []tabLink
+	Self     string // this pane's own URL, tab included
+	Board    board
+	Decided  []decision
+	History  []eventView
 }
 
 // refLink is a Ref with the URL of its Issue page, keeping the list filters.
@@ -522,7 +530,7 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 	data["Clear"] = "/" + slug
 
 	if selected != 0 {
-		iv, err := s.issueView(ctx, slug, selected, f, colours)
+		iv, err := s.issueView(ctx, slug, selected, f, r.URL.Query().Get("tab"), colours)
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -533,7 +541,7 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 	s.render(w, r, http.StatusOK, "project", data)
 }
 
-func (s *server) issueView(ctx context.Context, slug string, n int64, f filters, colours map[string]store.Label) (issueView, error) {
+func (s *server) issueView(ctx context.Context, slug string, n int64, f filters, tab string, colours map[string]store.Label) (issueView, error) {
 	i, err := s.Store.Issue(ctx, slug, n)
 	if err != nil {
 		return issueView{}, err
@@ -573,5 +581,8 @@ func (s *server) issueView(ctx context.Context, slug string, n int64, f filters,
 		iv.Comments = append(iv.Comments, commentView{Comment: c, Body: renderMarkdown(slug, c.Body)})
 	}
 	iv.Status = status(i, iv.Blocked)
+	if err := s.loadTab(ctx, &iv, tab, f); err != nil {
+		return issueView{}, err
+	}
 	return iv, nil
 }

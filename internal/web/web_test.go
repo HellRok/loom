@@ -347,7 +347,7 @@ func TestIssueOverview(t *testing.T) {
 	})
 
 	t.Run("map with children", func(t *testing.T) {
-		_, doc := f.get("/loom/issues/1", "issue-pane")
+		_, doc := f.get("/loom/issues/1?tab=overview", "issue-pane")
 		if got := text(doc, "dd.state"); got != "open (Map) · open" {
 			t.Errorf("state = %q", got)
 		}
