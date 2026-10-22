@@ -7,9 +7,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/HellRok/loom/internal/shim"
 	"github.com/HellRok/loom/internal/store"
 )
 
@@ -117,6 +119,11 @@ func NewServer(d Deps) *mcp.Server {
 		Name:        "delete_label",
 		Description: "Delete a label no Issue carries. If Issues carry it, the error lists them.",
 	}, h.deleteLabel)
+
+	add(s, h, &mcp.Tool{
+		Name:        "list_sessions",
+		Description: "Every agent Session Loom has recorded, with when it was first and last seen. Calls from `loom` subcommands aren't recorded.",
+	}, h.listSessions)
 	return s
 }
 
@@ -136,8 +143,10 @@ func add[In withCommon, Out any](s *mcp.Server, h *handlers, tool *mcp.Tool, han
 		if err != nil {
 			return nil, zero, err
 		}
-		if err := h.store.TouchSession(ctx, c.Session); err != nil {
-			h.logger.Warn("recording session", "session", c.Session, "err", err)
+		if !strings.HasPrefix(c.Session, shim.CLISessionPrefix) {
+			if err := h.store.TouchSession(ctx, c.Session); err != nil {
+				h.logger.Warn("recording session", "session", c.Session, "err", err)
+			}
 		}
 		out, err := handle(ctx, c, in)
 		if err != nil {

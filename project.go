@@ -104,6 +104,7 @@ func projectCall(name, cwd, tool string, args map[string]any) (map[string]any, i
 		fmt.Fprintf(os.Stderr, "loom %s: %v\n", name, err)
 		return nil, 1
 	}
+	s.AsCLI()
 	s.Cwd = cwd
 	res, err := s.Call(ctx, tool, args)
 	if err != nil {

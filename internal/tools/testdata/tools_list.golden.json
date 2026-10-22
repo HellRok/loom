@@ -829,6 +829,59 @@
     }
   },
   {
+    "description": "Every agent Session Loom has recorded, with when it was first and last seen. Calls from `loom` subcommands aren't recorded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_sessions",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "sessions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "first_seen": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "last_seen": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "first_seen",
+              "last_seen"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "sessions"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Rebind a Project's Root to your working directory (the git root, or the cwd outside git) after its repo moved, keeping its Slug and Issues. Pass `project`. Prefer this over create_project when no_project flags a Project as root_missing.",
     "inputSchema": {
       "additionalProperties": false,

@@ -1,9 +1,12 @@
 package tools_test
 
 import (
+	"net/http"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/HellRok/loom/internal/shim"
 )
 
 func TestCreateProjectInsideGitUsesGitRootAndBasename(t *testing.T) {
@@ -74,6 +77,28 @@ func TestCreateProjectRejectsDuplicateRootButAllowsNesting(t *testing.T) {
 	out := h.mustOK(h.call(inner, "create_project", map[string]any{"slug": "inner"}))
 	if out["root"] != inner {
 		t.Fatalf("got %v", out)
+	}
+}
+
+func TestCreateProjectAtAnExistingRootNamesItsSlugBeforeAnySlugComplaint(t *testing.T) {
+	h := newHarness(t)
+	outside := mkdir(t, t.TempDir(), "plain")
+	h.mustOK(h.call(outside, "create_project", map[string]any{"slug": "plain"}))
+
+	// No slug outside git would be slug_required, but the Root is taken.
+	r := h.call(outside, "create_project", nil)
+	if r.code() != "root_taken" || r.Err["slug"] != "plain" {
+		t.Fatalf("want root_taken naming plain, got %v", r)
+	}
+}
+
+func TestListSessionsSkipsCLISessions(t *testing.T) {
+	h := newHarness(t)
+	cli := http.Header{}
+	cli.Set("X-Loom-Session", shim.CLISessionPrefix+"0123456789abcdef")
+	h.mustOK(h.callWith(cli, "list_projects", nil))
+	if got := h.mustOK(h.call("", "list_sessions", nil))["sessions"].([]any); len(got) != 1 || got[0].(map[string]any)["id"] != testSession {
+		t.Fatalf("want only the agent Session, got %v", got)
 	}
 }
 
