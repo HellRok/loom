@@ -2,7 +2,7 @@
 // htmx upgrades to pane fragments, and the vendored static assets.
 //
 // Every URL returns a full page, or just a pane when the request carries
-// HX-Request: the pane named by HX-Target (#list-pane or #issue-pane) or,
+// HX-Request: the pane named by HX-Target (#nav, #list-pane or #issue-pane) or,
 // for any other target, the page's #main content.
 package web
 
@@ -193,6 +193,8 @@ func (s *server) render(w http.ResponseWriter, r *http.Request, status int, page
 	if r.Header.Get("HX-Request") != "" && r.Header.Get("HX-History-Restore-Request") == "" {
 		name = "main"
 		switch r.Header.Get("HX-Target") {
+		case "nav":
+			name = "nav"
 		case "list-pane":
 			name = "list-pane"
 		case "issue-pane":

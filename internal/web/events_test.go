@@ -12,7 +12,7 @@ import (
 )
 
 // TestLiveMarkup checks the wiring the browser needs for live updates: each
-// page connects to its stream, the list pane and home refresh on changed,
+// page connects to its stream, the sidebar, list pane and home refresh on changed,
 // the Issue pane only on its own Issue, and every pane refetches when the
 // stream (re)opens.
 func TestLiveMarkup(t *testing.T) {
@@ -41,13 +41,16 @@ func TestLiveMarkup(t *testing.T) {
 	if got := attr(doc, "[sse-connect]", "sse-connect"); got != "/loom/events" {
 		t.Errorf("project connects to %q", got)
 	}
+	if got := attr(doc, "#nav", "hx-trigger"); got != refresh {
+		t.Errorf("sidebar refreshes on %q", got)
+	}
 	if got := attr(doc, "#list-pane", "hx-trigger"); got != refresh {
 		t.Errorf("list refreshes on %q", got)
 	}
 	if got := attr(doc, "#issue-pane", "hx-trigger"); got != "sse:issue-2, htmx:sseOpen from:body" {
 		t.Errorf("Issue pane refreshes on %q", got)
 	}
-	for _, id := range []string{"#list-pane", "#issue-pane"} {
+	for _, id := range []string{"#nav", "#list-pane", "#issue-pane"} {
 		if got := attr(doc, id, "hx-swap"); got != "morph:outerHTML" {
 			t.Errorf("%s swaps with %q", id, got)
 		}
@@ -65,6 +68,10 @@ func TestLiveMarkup(t *testing.T) {
 	if got := attr(doc, "#issue-pane", "hx-trigger"); got != "sse:issue-2, htmx:sseOpen from:body" {
 		t.Errorf("Issue pane fragment refreshes on %q", got)
 	}
+	expect(t, doc, "[sse-connect]", 0)
+	_, doc = f.get("/loom", "nav")
+	expect(t, doc, "nav#nav .labels", 1)
+	expect(t, doc, "#list-pane", 0)
 	expect(t, doc, "[sse-connect]", 0)
 	_, doc = f.get("/", "home-pane")
 	expect(t, doc, "#home-pane", 1)

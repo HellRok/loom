@@ -1,5 +1,10 @@
 {{define "main"}}<div class="panes" hx-ext="sse,morph" sse-connect="/{{.Slug}}/events">
-<nav class="nav" id="nav" aria-label="Project navigation">
+{{template "nav" .}}
+{{template "list-pane" .}}
+{{template "issue-pane" .}}
+</div>{{end}}
+
+{{define "nav"}}<nav class="nav" id="nav" aria-label="Project navigation" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
   <h2>Projects</h2>
   <ul class="switcher">
     {{range .Switcher}}<li{{if .Active}} class="active" aria-current="page"{{end}}><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a> <span class="count">{{.Open}}</span></li>{{end}}
@@ -12,10 +17,7 @@
   <ul class="labels">
     {{range .LabelLinks}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="label label-{{.Colour}}">{{.Name}}</span></a> <span class="count">{{.Count}}</span></li>{{end}}
   </ul>
-</nav>
-{{template "list-pane" .}}
-{{template "issue-pane" .}}
-</div>{{end}}
+</nav>{{end}}
 
 {{define "list-pane"}}<section class="list" id="list-pane" aria-label="Issues" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
   <form class="filter" method="get" action="/{{.Slug}}">
