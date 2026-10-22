@@ -23,6 +23,7 @@ const usage = `usage: loom <command> [flags]
 commands:
   mcp     serve MCP over stdio, starting the daemon if needed
   stop    stop the daemon
+  project move or delete a Project (mv, rm)
   serve   run the daemon (normally started for you by the shim)
 
 Run 'loom <command> -h' for a command's flags.
@@ -42,6 +43,8 @@ func main() {
 		os.Exit(mcpShim(args))
 	case "stop":
 		os.Exit(stopDaemon(args))
+	case "project":
+		os.Exit(projectCmd(args))
 	case "serve":
 		os.Exit(serve(args))
 	default:

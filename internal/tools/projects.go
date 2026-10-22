@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -16,10 +17,14 @@ var slugRE = regexp.MustCompile(`^[a-z0-9-]+$`)
 type projectOut struct {
 	Slug string `json:"slug"`
 	Root string `json:"root"`
+	// RootMissing flags a Root that no longer exists on disk, as after the
+	// repo moved: the cue to call move_project instead of create_project.
+	RootMissing bool `json:"root_missing,omitempty"`
 }
 
 func toProjectOut(p store.Project) projectOut {
-	return projectOut{Slug: p.Slug, Root: p.Root}
+	_, err := os.Stat(p.Root)
+	return projectOut{Slug: p.Slug, Root: p.Root, RootMissing: errors.Is(err, os.ErrNotExist)}
 }
 
 func toProjectOuts(ps []store.Project) []projectOut {
@@ -95,6 +100,35 @@ func (h *handlers) listProjects(ctx context.Context, c call, in listProjectsIn) 
 		return listProjectsOut{}, err
 	}
 	return listProjectsOut{Projects: toProjectOuts(ps)}, nil
+}
+
+type moveProjectIn struct {
+	Common
+}
+
+// moveProject rebinds a Project's Root to where the caller is working. The
+// Project must be named or contain the caller, which a moved repo's old Root
+// no longer does, so agents pass `project`.
+func (h *handlers) moveProject(ctx context.Context, c call, in moveProjectIn) (projectOut, error) {
+	if c.Cwd == "" {
+		return projectOut{}, fail(codeNoCwd, "move_project rebinds a Project to the caller's working directory, but none was sent (X-Loom-Cwd). Use `loom mcp`, or send the header.", nil)
+	}
+	p, err := h.resolveProject(ctx, c)
+	if err != nil {
+		return projectOut{}, err
+	}
+	root, _ := c.location(ctx)
+	moved, err := h.store.MoveProject(ctx, p.Slug, root)
+	switch {
+	case errors.Is(err, store.ErrRootTaken):
+		return projectOut{}, h.projectError(ctx, codeRootTaken, fmt.Sprintf("%s is already another Project's Root.", root))
+	case errors.Is(err, store.ErrNotFound):
+		// The Project can vanish between the lookup and the move.
+		return projectOut{}, h.unknownProject(ctx, p.Slug)
+	case err != nil:
+		return projectOut{}, err
+	}
+	return toProjectOut(moved), nil
 }
 
 type deleteProjectIn struct {
