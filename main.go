@@ -14,12 +14,15 @@ import (
 	"github.com/HellRok/loom/internal/buildinfo"
 	"github.com/HellRok/loom/internal/config"
 	"github.com/HellRok/loom/internal/daemon"
+	"github.com/HellRok/loom/internal/shim"
 	"github.com/HellRok/loom/internal/store"
 )
 
 const usage = `usage: loom <command> [flags]
 
 commands:
+  mcp     serve MCP over stdio, starting the daemon if needed
+  stop    stop the daemon
   serve   run the daemon (normally started for you by the shim)
 
 Run 'loom <command> -h' for a command's flags.
@@ -35,6 +38,10 @@ func main() {
 	}
 	cmd, args := fs.Arg(0), fs.Args()[1:]
 	switch cmd {
+	case "mcp":
+		os.Exit(mcpShim(args))
+	case "stop":
+		os.Exit(stopDaemon(args))
 	case "serve":
 		os.Exit(serve(args))
 	default:
@@ -58,12 +65,7 @@ func serve(args []string) int {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
-	home, err := config.Home()
-	if err != nil {
-		logger.Error("startup failed", "err", err)
-		return 1
-	}
-	cfg, err := config.Load(ctx, home)
+	cfg, err := loadConfig(ctx)
 	if err != nil {
 		logger.Error("startup failed", "err", err)
 		return 1
@@ -88,4 +90,85 @@ func serve(args []string) int {
 		logger.Error("serve failed", "err", err)
 		return 1
 	}
+}
+
+// mcpShim runs `loom mcp`. Its stdout carries MCP only; anything else goes
+// to stderr.
+func mcpShim(args []string) int {
+	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), "usage: loom mcp\n\nServe MCP over stdio for an agent harness, starting the daemon if it isn't running.\n")
+	}
+	fs.Parse(args)
+	if fs.NArg() > 0 {
+		fs.Usage()
+		return 2
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	t, err := target(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "loom mcp:", err)
+		return 1
+	}
+	s, err := shim.New(t)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "loom mcp:", err)
+		return 1
+	}
+	if err := s.Run(ctx); err != nil && ctx.Err() == nil {
+		fmt.Fprintln(os.Stderr, "loom mcp:", err)
+		return 1
+	}
+	return 0
+}
+
+// stopDaemon runs `loom stop`.
+func stopDaemon(args []string) int {
+	fs := flag.NewFlagSet("stop", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), "usage: loom stop\n\nStop the daemon gracefully, letting in-flight calls finish.\n")
+	}
+	fs.Parse(args)
+	if fs.NArg() > 0 {
+		fs.Usage()
+		return 2
+	}
+
+	ctx := context.Background()
+	t, err := target(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "loom stop:", err)
+		return 1
+	}
+	stopped, err := t.Stop(ctx, 0)
+	switch {
+	case err != nil:
+		fmt.Fprintln(os.Stderr, "loom stop:", err)
+		return 1
+	case stopped:
+		fmt.Println("stopped")
+	default:
+		fmt.Println("not running")
+	}
+	return 0
+}
+
+// loadConfig reads the Loom home's effective config.
+func loadConfig(ctx context.Context) (config.Config, error) {
+	home, err := config.Home()
+	if err != nil {
+		return config.Config{}, err
+	}
+	return config.Load(ctx, home)
+}
+
+// target is the daemon this build of loom expects for the Loom home.
+func target(ctx context.Context) (shim.Target, error) {
+	cfg, err := loadConfig(ctx)
+	if err != nil {
+		return shim.Target{}, err
+	}
+	return shim.Target{Home: cfg.Home, Port: cfg.Port, Version: buildinfo.Version()}, nil
 }
