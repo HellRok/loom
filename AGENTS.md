@@ -1,3 +1,7 @@
+## Testing
+
+`go test ./...` runs the unit and handler tests. **System tests** boot a real Loom daemon and drive the web UI in headless Chrome (chromedp, using the locally installed Chrome); they live in `internal/systest` behind the `system` build tag. Run them with `go test -tags system ./internal/systest/`.
+
 ## Agent skills
 
 ### Issue tracker
