@@ -13,8 +13,8 @@ import (
 
 var (
 	numberRefRE = regexp.MustCompile(`^#?([0-9]+)$`)
-	slugRefRE   = regexp.MustCompile(`^([a-z0-9-]+)#([0-9]+)$`)
-	urlPathRE   = regexp.MustCompile(`^/([a-z0-9-]+)/issues/([0-9]+)/?$`)
+	slugRefRE   = regexp.MustCompile(`^(` + slugPattern + `)#([0-9]+)$`)
+	urlPathRE   = regexp.MustCompile(`^/(` + slugPattern + `)/issues/([0-9]+)/?$`)
 )
 
 // ref names an Issue: its number, and its Project's Slug when the ref

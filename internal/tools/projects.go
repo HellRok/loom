@@ -12,7 +12,11 @@ import (
 	"github.com/HellRok/loom/internal/store"
 )
 
-var slugRE = regexp.MustCompile(`^[a-z0-9-]+$`)
+// slugPattern is the characters a Slug may use; every pattern that reads a
+// Slug builds on it.
+const slugPattern = `[a-z0-9_-]+`
+
+var slugRE = regexp.MustCompile(`^` + slugPattern + `$`)
 
 type projectOut struct {
 	Slug string `json:"slug"`
@@ -40,7 +44,7 @@ func toProjectOuts(ps []store.Project) []projectOut {
 
 type createProjectIn struct {
 	Common
-	Slug string `json:"slug,omitempty" jsonschema:"Defaults to the git root's folder name; required outside git. Lowercase letters, digits and hyphens."`
+	Slug string `json:"slug,omitempty" jsonschema:"Defaults to the git root's folder name; required outside git. Lowercase letters, digits, hyphens and underscores."`
 }
 
 func (h *handlers) createProject(ctx context.Context, c call, in createProjectIn) (projectOut, error) {
@@ -61,7 +65,7 @@ func (h *handlers) createProject(ctx context.Context, c call, in createProjectIn
 		slug = filepath.Base(root)
 	}
 	if !slugRE.MatchString(slug) {
-		return projectOut{}, fail(codeInvalidSlug, fmt.Sprintf("Slug %q must use only lowercase letters, digits and hyphens. Pass a `slug`.", slug), map[string]any{"suggestion": suggestSlug(slug)})
+		return projectOut{}, fail(codeInvalidSlug, fmt.Sprintf("Slug %q must use only lowercase letters, digits, hyphens and underscores. Pass a `slug`.", slug), map[string]any{"suggestion": suggestSlug(slug)})
 	}
 	p, err := h.store.CreateProject(ctx, slug, root)
 	switch {
@@ -105,7 +109,7 @@ func suggestSlug(name string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(name) {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_':
 			b.WriteRune(r)
 		default:
 			b.WriteRune('-')

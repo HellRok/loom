@@ -421,7 +421,7 @@
           "type": "string"
         },
         "slug": {
-          "description": "Defaults to the git root's folder name; required outside git. Lowercase letters, digits and hyphens.",
+          "description": "Defaults to the git root's folder name; required outside git. Lowercase letters, digits, hyphens and underscores.",
           "type": "string"
         }
       },

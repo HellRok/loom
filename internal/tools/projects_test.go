@@ -43,11 +43,48 @@ func TestCreateProjectWithoutCwd(t *testing.T) {
 
 func TestCreateProjectRejectsInvalidSlug(t *testing.T) {
 	h := newHarness(t)
-	repo := gitRepo(t, t.TempDir(), "My_Repo")
+	repo := gitRepo(t, t.TempDir(), "My Repo")
 
 	r := h.call(repo, "create_project", nil)
 	if r.code() != "invalid_slug" || r.Err["suggestion"] != "my-repo" {
 		t.Fatalf("want invalid_slug suggesting my-repo, got %v", r)
+	}
+
+	// Uppercase is invalid, but the suggestion keeps the underscore.
+	upper := gitRepo(t, t.TempDir(), "My_Repo")
+	r = h.call(upper, "create_project", nil)
+	if r.code() != "invalid_slug" || r.Err["suggestion"] != "my_repo" {
+		t.Fatalf("want invalid_slug suggesting my_repo, got %v", r)
+	}
+}
+
+func TestCreateProjectRejectsSlugsOutsideTheAllowedCharacters(t *testing.T) {
+	h := newHarness(t)
+	dir := mkdir(t, t.TempDir(), "notes")
+
+	for _, slug := range []string{"Upper", "has space", "a#b", "a/b", "a.b"} {
+		if r := h.call(dir, "create_project", map[string]any{"slug": slug}); r.code() != "invalid_slug" {
+			t.Errorf("slug %q: want invalid_slug, got %v", slug, r)
+		}
+	}
+}
+
+func TestSlugWithUnderscoreResolvesByRefAndURL(t *testing.T) {
+	h := newHarness(t)
+	repo := gitRepo(t, t.TempDir(), "my_repo")
+	elsewhere := mkdir(t, t.TempDir(), "elsewhere")
+
+	if out := h.mustOK(h.call(repo, "create_project", nil)); out["slug"] != "my_repo" {
+		t.Fatalf("got %v, want slug my_repo", out)
+	}
+	created := h.mustOK(h.call(repo, "create_issue", map[string]any{"title": "x"}))
+
+	// From outside the Project, only the ref's own slug says which one.
+	for _, ref := range []string{"my_repo#1", created["url"].(string)} {
+		view := h.mustOK(h.call(elsewhere, "view_issue", map[string]any{"ref": ref}))
+		if view["project"] != "my_repo" || view["ref"] != "#1" {
+			t.Errorf("ref %q: got %v", ref, view)
+		}
 	}
 }
 
