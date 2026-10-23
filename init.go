@@ -122,6 +122,17 @@ func runInit(ctx context.Context, out io.Writer, slug string, standalone bool) e
 		fmt.Fprintf(out, "%s: %s\n", repo.AgentsFile, changeWord(pointed))
 	}
 
+	// Read the Glossary before clearing Standalone, so a failure here leaves
+	// the Project as it was and a rerun still warns.
+	var glossary string
+	if !standalone {
+		g, err := callTool(ctx, s, "view_glossary", map[string]any{"project": project})
+		if err != nil {
+			return err
+		}
+		glossary, _ = g["body"].(string)
+	}
+
 	res, err := callTool(ctx, s, "set_standalone", map[string]any{"project": project, "standalone": standalone})
 	if err != nil {
 		return err
@@ -130,6 +141,10 @@ func runInit(ctx context.Context, out io.Writer, slug string, standalone bool) e
 		fmt.Fprintln(out, "standalone: yes")
 	} else if already, _ := res["already"].(bool); !already {
 		fmt.Fprintln(out, "standalone: cleared")
+		// Agents stop seeing the Glossary now, but it stays in Loom.
+		if strings.TrimSpace(glossary) != "" {
+			fmt.Fprintln(out, "glossary: kept in Loom but no longer shown to agents; export with view_glossary")
+		}
 	}
 
 	res, err = callTool(ctx, s, "list_sessions", nil)

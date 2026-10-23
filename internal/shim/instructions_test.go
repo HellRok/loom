@@ -88,11 +88,35 @@ func checkPlainInstructions(t *testing.T, got string) {
 	}
 }
 
-func TestInstructionsForAStandaloneProjectNameItToo(t *testing.T) {
+func TestInstructionsForAStandaloneProjectAddGlossaryGuidance(t *testing.T) {
 	for name, opts := range handshakes {
 		t.Run(name, func(t *testing.T) {
 			cs := agentIn(t, opts, "app", map[string]any{"slug": "app", "root": "/work/app", "standalone": true})
-			checkPlainInstructions(t, cs.InitializeResult().Instructions)
+			got := cs.InitializeResult().Instructions
+			checkPlainInstructions(t, got)
+			for _, want := range []string{
+				"view_glossary", "edit_glossary", "GLOSSARY.md",
+				"first and Loom's Glossary second", "Loom's wins on conflict", "Write only to Loom's",
+				"docs/adr/", "`needs-triage` Issue",
+			} {
+				if !strings.Contains(got, want) {
+					t.Errorf("instructions lack %q:\n%s", want, got)
+				}
+			}
+		})
+	}
+}
+
+func TestInstructionsForAPlainProjectSayNothingOfTheGlossary(t *testing.T) {
+	for name, opts := range handshakes {
+		t.Run(name, func(t *testing.T) {
+			cs := agentIn(t, opts, "app", map[string]any{"slug": "app", "root": "/work/app"})
+			got := cs.InitializeResult().Instructions
+			for _, unwanted := range []string{"view_glossary", "edit_glossary", "GLOSSARY.md", "docs/adr/"} {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("plain instructions include %q:\n%s", unwanted, got)
+				}
+			}
 		})
 	}
 }

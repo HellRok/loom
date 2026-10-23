@@ -354,6 +354,9 @@ func TestStandaloneInitIsIdempotentAndPlainInitClearsIt(t *testing.T) {
 	if !strings.Contains(out, "standalone: cleared") || standalone() != nil {
 		t.Errorf("plain init didn't clear Standalone (%v):\n%s", standalone(), out)
 	}
+	if strings.Contains(out, "glossary:") {
+		t.Errorf("plain init warned about a Glossary there isn't:\n%s", out)
+	}
 	if out, err = in.initIn(repo); err != nil || strings.Contains(out, "standalone") {
 		t.Errorf("plain init on a plain Project mentioned standalone (%v):\n%s", err, out)
 	}
@@ -366,6 +369,36 @@ func TestStandaloneInitIsIdempotentAndPlainInitClearsIt(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, tree(t, repo)) {
 		t.Error("switching to Standalone changed files in the repo")
+	}
+}
+
+func TestPlainInitWarnsWhenLeavingStandaloneWithAGlossary(t *testing.T) {
+	const warning = "glossary: kept in Loom but no longer shown to agents; export with view_glossary"
+	in := newInstall(t)
+	repo := newRepo(t, "widget", map[string]string{
+		"CLAUDE.md":                    setupClaude,
+		"docs/agents/issue-tracker.md": "old doc",
+		"docs/agents/triage-labels.md": triageLabels,
+	})
+	if out, err := in.initIn(repo, "--standalone"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	call(t, in.shim(), "edit_glossary", map[string]any{"project": "widget", "version": 0, "body": "# Widget\n\n**Gizmo**: a thing."})
+
+	out, err := in.initIn(repo)
+	if err != nil {
+		t.Fatalf("plain init: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, warning) {
+		t.Errorf("no Glossary warning:\n%s", out)
+	}
+	if got := call(t, in.shim(), "view_glossary", map[string]any{"project": "widget"}); got["body"] == "" || got["version"] != float64(1) {
+		t.Errorf("plain init didn't keep the Glossary: %v", got)
+	}
+
+	// The Project is plain now, so a repeat has nothing to warn about.
+	if out, err = in.initIn(repo); err != nil || strings.Contains(out, "glossary:") {
+		t.Errorf("repeat plain init (%v):\n%s", err, out)
 	}
 }
 

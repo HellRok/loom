@@ -104,42 +104,44 @@ func (s *Shim) Server() *mcp.Server {
 func (s *Shim) instructions(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, instructionsTimeout)
 	defer cancel()
-	slug, err := s.currentProject(ctx)
+	p, err := s.currentProject(ctx)
 	switch {
 	case err != nil:
 		return repoinit.StaticInstructions
-	case slug == "":
+	case p == nil:
 		return ""
 	}
-	return repoinit.Instructions(slug)
+	return repoinit.Instructions(p.Slug, p.Standalone)
 }
 
-// currentProject asks the daemon for the Slug of the Project covering the
-// shim's cwd, empty if none does.
-func (s *Shim) currentProject(ctx context.Context) (string, error) {
+// cwdProject is the Project covering the shim's cwd, as the daemon
+// reports it.
+type cwdProject struct {
+	Slug       string `json:"slug"`
+	Standalone bool   `json:"standalone"`
+}
+
+// currentProject asks the daemon for the Project covering the shim's cwd, nil
+// if none does.
+func (s *Shim) currentProject(ctx context.Context) (*cwdProject, error) {
 	res, err := s.Call(ctx, "list_projects", nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if res.IsError {
-		return "", fmt.Errorf("list_projects failed: %v", res.Content)
+		return nil, fmt.Errorf("list_projects failed: %v", res.Content)
 	}
 	b, err := json.Marshal(res.StructuredContent)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var out struct {
-		Current *struct {
-			Slug string `json:"slug"`
-		} `json:"current"`
+		Current *cwdProject `json:"current"`
 	}
 	if err := json.Unmarshal(b, &out); err != nil {
-		return "", err
+		return nil, err
 	}
-	if out.Current == nil {
-		return "", nil
-	}
-	return out.Current.Slug, nil
+	return out.Current, nil
 }
 
 // Call makes one tool call for a CLI command, starting the daemon if needed.
