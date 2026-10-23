@@ -5,7 +5,6 @@ package systest
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -29,19 +28,11 @@ func TestSidebarLabelCountsUpdateLive(t *testing.T) {
 	}
 
 	l.Call("label", map[string]any{"ref": "#1", "add": []string{"bug"}})
-	got := Get(l, chromedp.Poll[string](labelCount("bug")+` === "1" && "1"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
-	if got != "1" {
-		t.Fatalf("bug count after labelling: got %q, want 1", got)
-	}
+	pollUntil(l, labelCount("bug")+` === "1"`)
 
 	// Closing the Issue moves it out of the Open view the counts follow.
 	l.Call("close", map[string]any{"ref": "#1"})
-	got = Get(l, chromedp.Poll[string](labelCount("bug")+` === "0" && "0"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
-	if got != "0" {
-		t.Fatalf("bug count after closing: got %q, want 0", got)
-	}
+	pollUntil(l, labelCount("bug")+` === "0"`)
 }
 
 // viewCount is a JavaScript expression for the count beside the nth (1-based)
@@ -60,7 +51,7 @@ func TestSelectedLabelNarrowsTheViewCountsAndSurvivesSwitchingView(t *testing.T)
 
 	poll := func(expr string) {
 		t.Helper()
-		Get(l, chromedp.Poll[string](`(`+expr+`) && "ok"`, chromedp.WithPollingTimeout(5*time.Second)))
+		pollUntil(l, expr)
 	}
 	eq := func(expr, want string) string { return fmt.Sprintf(`%s === %q`, expr, want) }
 

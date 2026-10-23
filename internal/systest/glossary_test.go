@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -21,10 +20,8 @@ func TestGlossaryFillsTheSpaceBesideTheNavigation(t *testing.T) {
 	l.Do(chromedp.EmulateViewport(1280, 720))
 	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
 	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .reference a").click()`))
-	Get(l, chromedp.Poll[string](`location.pathname === "/demo/glossary" && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
-	Get(l, chromedp.Poll[string](`document.querySelector("#glossary-pane") && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
+	pollUntil(l, `location.pathname === "/demo/glossary"`)
+	pollUntil(l, `document.querySelector("#glossary-pane")`)
 
 	// The list and Issue panes are gone and the Glossary takes their space.
 	if got := Get(l, chromedp.Evaluate[bool](`!document.querySelector("#list-pane, #issue-pane")`)); !got {
@@ -46,7 +43,7 @@ func TestGlossaryFillsTheSpaceBesideTheNavigation(t *testing.T) {
 	}
 
 	// It scrolls on its own, leaving the navigation and the page where they were.
-	if scrollBy(l, "#glossary-pane", scrollOffset) == 0 {
+	if scrollTo(l, "#glossary-pane", scrollOffset) == 0 {
 		t.Fatal("#glossary-pane doesn't scroll")
 	}
 	if got := scrollPosition(l, "#nav"); got != 0 {
@@ -59,14 +56,12 @@ func TestGlossaryFillsTheSpaceBesideTheNavigation(t *testing.T) {
 	// A live update refreshes the Glossary and the navigation without
 	// moving where the Glossary is scrolled.
 	l.Call("create_issue", map[string]any{"title": "Arrives mid-scroll"})
-	Get(l, chromedp.Poll[string](`document.querySelector("#nav .views li:nth-child(3) .count")?.textContent === "2" && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
+	pollUntil(l, viewCount(3)+` === "2"`)
 	if got := scrollPosition(l, "#glossary-pane"); got != scrollOffset {
 		t.Errorf("#glossary-pane after a live update: scrolled to %v, want %d", got, scrollOffset)
 	}
 
 	// The navigation still gets back to the Issues.
 	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .views li:nth-child(3) a").click()`))
-	Get(l, chromedp.Poll[string](`document.querySelector("#list-pane") && !document.querySelector("#glossary-pane") && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
+	pollUntil(l, `document.querySelector("#list-pane") && !document.querySelector("#glossary-pane")`)
 }

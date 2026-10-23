@@ -5,7 +5,6 @@ package systest
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -24,10 +23,7 @@ func TestIssueWithOpenChildrenShowsAsBlocked(t *testing.T) {
 	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
 	poll := func(expr, want string) {
 		t.Helper()
-		got := Get(l, chromedp.Poll[string](fmt.Sprintf(`(%s) === %q && "ok"`, expr, want), chromedp.WithPollingTimeout(5*time.Second)))
-		if got != "ok" {
-			t.Fatalf("%s never read %q", expr, want)
-		}
+		pollUntil(l, fmt.Sprintf(`(%s) === %q`, expr, want))
 	}
 	waiting := `document.querySelector("#list-pane #row-1 .row-waiting")?.textContent ?? ""`
 	poll(rowStatus(1), "status-blocked")

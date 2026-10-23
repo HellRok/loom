@@ -5,7 +5,6 @@ package systest
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -17,10 +16,7 @@ const frontierRows = `[...document.querySelectorAll("#list-pane .rows .row .num"
 // frontierIs waits for the ready rows to read want.
 func frontierIs(t *testing.T, l *Loom, want string) {
 	t.Helper()
-	expr := fmt.Sprintf(`(%s) === %q && "ok"`, frontierRows, want)
-	if got := Get(l, chromedp.Poll[string](expr, chromedp.WithPollingTimeout(5*time.Second))); got != "ok" {
-		t.Fatalf("frontier never read %q", want)
-	}
+	pollUntil(l, fmt.Sprintf(`%s === %q`, frontierRows, want))
 }
 
 func TestFrontierUpdatesLive(t *testing.T) {
@@ -43,8 +39,5 @@ func TestFrontierUpdatesLive(t *testing.T) {
 
 	// Tagging it reaches the sidebar's Label count.
 	l.Call("label", map[string]any{"ref": "#2", "add": []string{"ready-for-agent"}})
-	got := Get(l, chromedp.Poll[string](labelCount("ready-for-agent")+` === "1" && "ok"`, chromedp.WithPollingTimeout(5*time.Second)))
-	if got != "ok" {
-		t.Fatal("the ready-for-agent count never read 1")
-	}
+	pollUntil(l, labelCount("ready-for-agent")+` === "1"`)
 }

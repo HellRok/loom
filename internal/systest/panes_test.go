@@ -20,20 +20,26 @@ func scrollPosition(l *Loom, sel string) float64 {
 	return Get(l, chromedp.Evaluate[float64](fmt.Sprintf(`document.querySelector(%q).scrollTop`, sel)))
 }
 
-// scrollBy scrolls the element to y and returns where it ended up, which is
+// scrollTo scrolls the element to y and returns where it ended up, which is
 // 0 if it has nothing to scroll.
-func scrollBy(l *Loom, sel string, y int) float64 {
+func scrollTo(l *Loom, sel string, y int) float64 {
 	l.t.Helper()
 	return Get(l, chromedp.Evaluate[float64](fmt.Sprintf(
 		`(() => { const el = document.querySelector(%q); el.scrollTop = %d; return el.scrollTop })()`, sel, y)))
 }
 
+// scrollToBottom scrolls the element as far down as it goes and returns where
+// that is.
+func scrollToBottom(l *Loom, sel string) float64 {
+	l.t.Helper()
+	return Get(l, chromedp.Evaluate[float64](fmt.Sprintf(
+		`(() => { const el = document.querySelector(%q); el.scrollTop = el.scrollHeight; return el.scrollTop })()`, sel)))
+}
+
 func TestPanesScrollIndependently(t *testing.T) {
 	const issues = 60
 	l := Start(t, "demo")
-	for i := range 40 {
-		l.Call("create_label", map[string]any{"name": fmt.Sprintf("label-%02d", i)})
-	}
+	seedLabels(l, 40)
 	l.Call("create_issue", map[string]any{
 		"title": "Long Issue",
 		"body":  strings.Repeat("A line of the body.\n\n", 120),
@@ -60,15 +66,15 @@ func TestPanesScrollIndependently(t *testing.T) {
 		if bottom != 0 {
 			t.Fatalf("%s ends %vpx from the bottom of the viewport, want 0", sel, -bottom)
 		}
-		if scrollBy(l, sel, scrollOffset) == 0 {
+		if scrollTo(l, sel, scrollOffset) == 0 {
 			t.Fatalf("%s doesn't scroll", sel)
 		}
-		scrollBy(l, sel, 0)
+		scrollTo(l, sel, 0)
 	}
 
 	// Scrolling one pane leaves the others, and the page, where they were.
 	for _, scrolled := range panes {
-		scrollBy(l, scrolled, scrollOffset)
+		scrollTo(l, scrolled, scrollOffset)
 		for _, other := range panes {
 			if other != scrolled {
 				if got := scrollPosition(l, other); got != 0 {
@@ -79,12 +85,12 @@ func TestPanesScrollIndependently(t *testing.T) {
 		if got := Get(l, chromedp.Evaluate[float64](`document.scrollingElement.scrollTop`)); got != 0 {
 			t.Errorf("scrolling %s moved the page to %v", scrolled, got)
 		}
-		scrollBy(l, scrolled, 0)
+		scrollTo(l, scrolled, 0)
 	}
 
 	// Live updates morph the panes without resetting where they're scrolled.
 	for _, sel := range panes {
-		scrollBy(l, sel, scrollOffset)
+		scrollTo(l, sel, scrollOffset)
 	}
 	l.Call("create_issue", map[string]any{"title": "Arrives mid-scroll"})
 	l.Call("comment", map[string]any{"ref": "#1", "body": "Arrives mid-scroll"})
@@ -94,7 +100,7 @@ func TestPanesScrollIndependently(t *testing.T) {
 		// The Open view's count in the sidebar, so the nav's morph has landed too.
 		fmt.Sprintf(`document.querySelector("#nav .views li.active .count")?.textContent === "%d"`, issues+1),
 	} {
-		Get(l, chromedp.Poll[string](landed+` && "ok"`, chromedp.WithPollingTimeout(5*time.Second)))
+		pollUntil(l, landed)
 	}
 	for _, sel := range panes {
 		if got := scrollPosition(l, sel); got != scrollOffset {
@@ -105,36 +111,31 @@ func TestPanesScrollIndependently(t *testing.T) {
 
 func TestNavigationKeepsItsScrollWhenFollowingLinks(t *testing.T) {
 	l := Start(t, "demo")
-	for i := range 40 {
-		l.Call("create_label", map[string]any{"name": fmt.Sprintf("label-%02d", i)})
-	}
+	seedLabels(l, 40)
 	l.Call("create_issue", map[string]any{"title": "An Issue"})
 
 	l.Do(chromedp.EmulateViewport(1280, 720))
 	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
-	scrolled := scrollBy(l, "#nav", 10000)
+	scrolled := scrollToBottom(l, "#nav")
 	if scrolled == 0 {
 		t.Fatal("#nav doesn't scroll")
 	}
 
 	// A label link far down the sidebar.
 	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .labels li:last-child a").click()`))
-	Get(l, chromedp.Poll[string](`location.search.includes("label=") && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
+	pollUntil(l, `location.search.includes("label=")`)
 	if got := scrollPosition(l, "#nav"); got != scrolled {
 		t.Errorf("#nav after following a label link: scrolled to %v, want %v", got, scrolled)
 	}
 
 	// The filter form, once htmx has settled the swap and bound the new form.
-	Get(l, chromedp.Poll[string](`!document.querySelector(".htmx-request, .htmx-swapping, .htmx-settling") && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
+	waitForHtmxIdle(l)
 	Get(l, chromedp.Evaluate[any](`(() => {
 		const form = document.querySelector("#list-pane form.filter");
 		form.q.value = "Issue";
 		form.requestSubmit();
 	})()`))
-	Get(l, chromedp.Poll[string](`location.search.includes("q=Issue") && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
+	pollUntil(l, `location.search.includes("q=Issue")`)
 	// Give a full page load time to replace the pane, then check it didn't.
 	time.Sleep(300 * time.Millisecond)
 	if got := scrollPosition(l, "#nav"); got != scrolled {
@@ -144,27 +145,24 @@ func TestNavigationKeepsItsScrollWhenFollowingLinks(t *testing.T) {
 
 func TestSelectingARowKeepsTheListAndNavigationScroll(t *testing.T) {
 	l := Start(t, "demo")
-	for i := range 40 {
-		l.Call("create_label", map[string]any{"name": fmt.Sprintf("label-%02d", i)})
-	}
+	seedLabels(l, 40)
 	for i := 1; i <= 60; i++ {
 		l.Call("create_issue", map[string]any{"title": fmt.Sprintf("Issue %d", i)})
 	}
 
 	l.Do(chromedp.EmulateViewport(1280, 720))
 	l.Do(chromedp.Navigate(l.URL("/demo/issues/1?view=open")))
-	listScrolled := scrollBy(l, "#list-pane", 10000)
-	navScrolled := scrollBy(l, "#nav", 10000)
+	listScrolled := scrollToBottom(l, "#list-pane")
+	navScrolled := scrollToBottom(l, "#nav")
 	if listScrolled == 0 || navScrolled == 0 {
 		t.Fatalf("the panes don't scroll: list %v, nav %v", listScrolled, navScrolled)
 	}
 
-	// A row far down the list, followed without scrolling it into view.
+	// A row out of view at the top of the list (it sorts oldest first), followed
+	// without scrolling it into view.
 	Get(l, chromedp.Evaluate[any](`document.querySelector("#row-5 .row-link").click()`))
-	Get(l, chromedp.Poll[string](`document.querySelector("#row-5.selected") && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
-	Get(l, chromedp.Poll[string](`!document.querySelector(".htmx-request, .htmx-swapping, .htmx-settling") && "ok"`,
-		chromedp.WithPollingTimeout(5*time.Second)))
+	pollUntil(l, `document.querySelector("#row-5.selected")`)
+	waitForHtmxIdle(l)
 	if got := Get(l, chromedp.Evaluate[float64](`document.querySelectorAll("#list-pane").length`)); got != 1 {
 		t.Errorf("%v list panes after selecting a row, want 1", got)
 	}
