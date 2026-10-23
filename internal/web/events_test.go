@@ -128,6 +128,7 @@ func TestClosingStreamsEndsThem(t *testing.T) {
 // its pane with the morph swap and still rendering as a page and a fragment.
 func TestLiveSessionsAndGlossaryMarkup(t *testing.T) {
 	f := seedSessions(t)
+	standalone(t, f, "loom") // the Glossary page is 404 for a plain Project
 	const refresh = "sse:changed, htmx:sseOpen from:body"
 	for _, tc := range []struct {
 		path, pane, stream string
