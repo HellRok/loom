@@ -162,7 +162,7 @@ func TestInitWithoutSetupChangesNothing(t *testing.T) {
 			if err == nil {
 				t.Fatalf("loom init succeeded:\n%s", out)
 			}
-			for _, want := range []string{"mattpocock/skills", "/setup-matt-pocock-skills"} {
+			for _, want := range []string{"mattpocock/skills", "/setup-matt-pocock-skills", "loom init --standalone"} {
 				if !strings.Contains(out, want) {
 					t.Errorf("output lacks %q:\n%s", want, out)
 				}

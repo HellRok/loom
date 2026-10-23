@@ -55,7 +55,7 @@ type NotSetUpError struct {
 }
 
 func (e *NotSetUpError) Error() string {
-	return e.Reason + ".\nInstall the skills from https://github.com/mattpocock/skills and run /setup-matt-pocock-skills in this repo first, then run `loom init` again. Nothing was changed."
+	return e.Reason + ".\nInstall the skills from https://github.com/mattpocock/skills and run /setup-matt-pocock-skills in this repo first, then run `loom init` again. To use Loom here without adding files to the repo, run `loom init --standalone`. Nothing was changed."
 }
 
 // Repo is a repo that setup has run in.
