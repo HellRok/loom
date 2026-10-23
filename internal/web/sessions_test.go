@@ -55,6 +55,9 @@ func TestClaimsShowHolderSession(t *testing.T) {
 		if got := text(doc, "#row-3 .held-by .idle"); got != "idle <1m" {
 			t.Errorf("idle = %q", got)
 		}
+		if got := text(doc, "#row-3 .held-by"); got != "held by: 11112222 idle <1m" {
+			t.Errorf("held-by line = %q", got)
+		}
 		expect(t, doc, "#row-2 .held-by", 0)
 	})
 

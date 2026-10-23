@@ -501,8 +501,9 @@ type switcherItem struct {
 
 type row struct {
 	store.Issue
-	Parent  *Ref
-	Blocked bool
+	Parent    *Ref
+	ParentURL string // the Issue pane link for Parent, carrying the filters
+	Blocked   bool
 	// OpenChildren counts the children it is waiting on, unless it is a Map.
 	OpenChildren int
 	Labels       []store.Label
@@ -697,6 +698,9 @@ func (s *server) listRow(ctx context.Context, slug string, i store.Issue, f filt
 	rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked() || rel.OpenChildren > 0, OpenChildren: rel.OpenChildren,
 		URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected,
 		Holder: hs.view(i.HolderSession)}
+	if rel.Parent != nil {
+		rw.ParentURL = "/" + slug + "/issues/" + strconv.FormatInt(rel.Parent.Number, 10) + f.query()
+	}
 	for _, name := range byIssue[i.Number] {
 		rw.Labels = append(rw.Labels, colours[name])
 	}

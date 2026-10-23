@@ -202,7 +202,7 @@ func TestProjectPage(t *testing.T) {
 		if got := text(doc, "#row-2 .num"); got != "#2" {
 			t.Errorf("row num = %q", got)
 		}
-		if got := text(doc, "#row-2 .parent"); got != "↑#1" {
+		if got := text(doc, "#row-2 .row-parent"); got != "parent: #1" {
 			t.Errorf("row parent = %q", got)
 		}
 		if got := text(doc, "#row-2 .title"); got != "Write the web UI" {
@@ -676,15 +676,15 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 		if !row.HasClass("status-blocked") {
 			t.Errorf("#1 should read as blocked: %v", row.AttrOr("class", ""))
 		}
-		if got := text(doc, "#row-1 .waiting"); got != "waiting on 1 open child" {
+		if got := text(doc, "#row-1 .row-waiting"); got != "waiting on 1 open child" {
 			t.Errorf("#1 waiting = %q", got)
 		}
-		expect(t, doc, "#row-2 .waiting", 0)
+		expect(t, doc, "#row-2 .row-waiting", 0)
 		// A Map is never waiting on its Tickets.
 		if doc.Find("#row-3").HasClass("status-blocked") {
 			t.Errorf("a Map isn't blocked by its open children")
 		}
-		expect(t, doc, "#row-3 .waiting", 0)
+		expect(t, doc, "#row-3 .row-waiting", 0)
 	})
 
 	t.Run("issue pane", func(t *testing.T) {
@@ -734,7 +734,7 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, doc := f.get("/loom?view=open", "")
-		if got := text(doc, "#row-1 .waiting"); got != "waiting on 1 open child" {
+		if got := text(doc, "#row-1 .row-waiting"); got != "waiting on 1 open child" {
 			t.Errorf("#1 waiting = %q", got)
 		}
 		_, doc = f.get("/loom?view=frontier", "")
@@ -757,6 +757,6 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 		expect(t, doc, ".not-ready", 0)
 		_, doc = f.get("/loom/issues/1", "")
 		expect(t, doc, "#issue-pane dd.open-children", 0)
-		expect(t, doc, "#row-1 .waiting", 0)
+		expect(t, doc, "#row-1 .row-waiting", 0)
 	})
 }

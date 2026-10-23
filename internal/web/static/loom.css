@@ -40,10 +40,17 @@ progress { width: 10rem; vertical-align: middle; }
 .active-filters { color: var(--muted); font-size: 0.85em; margin: 0.4rem 0; }
 .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 0.3em; margin-left: 0.25em; }
 .rows { list-style: none; margin: 0; padding: 0; }
-.row a { display: block; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); color: var(--fg); }
-.row.selected a { background: var(--panel); }
-.row .num, .row .parent { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 0.3em; }
-.row .glyph { margin-right: 0.3em; }
+.rows .row { position: relative; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); }
+.rows .row.selected { background: var(--panel); }
+/* The title link's box covers the whole row, so a click anywhere opens the
+   Issue. The links in the meta lines sit above it. */
+.row-link { color: var(--fg); }
+.row-link::after { content: ""; position: absolute; inset: 0; }
+.row-parent a, .row-held-by a { position: relative; }
+.row-parent, .row-waiting, .rows .row-held-by { color: var(--muted); font-size: 0.8em; }
+.rows .row-held-by .idle { font-size: 1em; }
+.row-labels { line-height: 1.7; }
+.row .num { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 0.3em; }
 .row.status-closed .title { color: var(--muted); }
 .row .updated { display: block; color: var(--muted); font-size: 0.8em; }
 .empty { color: var(--muted); }
@@ -102,7 +109,6 @@ progress { width: 10rem; vertical-align: middle; }
 
 .top-link { margin-left: 1rem; }
 .holder .idle, .held-by { color: var(--muted); font-size: 0.85em; }
-.row .held-by { margin: 0 0 0.2rem 0.25rem; }
 .session-link { font-family: ui-monospace, monospace; }
 .sessions, .session { max-width: 52rem; margin: 0 auto; padding: 1rem; }
 .session-list { border-collapse: collapse; width: 100%; }
@@ -116,5 +122,6 @@ progress { width: 10rem; vertical-align: middle; }
 .frontier-counts { margin: 0.4rem 0 0; font-size: 0.9em; }
 .not-ready-heading { font-size: 0.85rem; color: var(--muted); margin: 1rem 0 0.25rem; }
 .not-ready { list-style: none; margin: 0; padding: 0; opacity: 0.65; }
-.row .waiting { color: var(--muted); font-size: 0.8em; margin-left: 0.4em; }
+.not-ready .row a { display: block; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); color: var(--fg); }
+.not-ready .row.selected a { background: var(--panel); }
 .not-ready .reason { display: block; color: var(--muted); font-size: 0.8em; }

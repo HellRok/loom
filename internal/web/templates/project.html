@@ -37,16 +37,12 @@
   <ul class="rows">
     {{range .Rows}}
     <li class="row status-{{.Status}}{{if .Selected}} selected{{end}}" id="row-{{.Number}}">
-      <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true">
-        <span class="num">#{{.Number}}</span>
-        {{if .Parent}}<span class="parent" title="{{.Parent.Title}}">↑#{{.Parent.Number}}</span>{{end}}
-        <span class="glyph" title="{{.Status}}">{{.Glyph}}</span>
-        <span class="title">{{.Title}}</span>
-        {{with .Waiting}}<span class="waiting">{{.}}</span>{{end}}
-        {{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span>{{end}}
-        <time class="updated" datetime="{{iso .UpdatedAt}}">{{ago .UpdatedAt}}</time>
-      </a>
-      {{with .Holder}}<p class="held-by">held by {{template "holder" .}}</p>{{end}}
+      <div class="row-title"><a class="row-link" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true" title="{{.Status}}"><span class="glyph">{{.Glyph}}</span> <span class="num">#{{.Number}}</span> <span class="title">{{.Title}}</span></a></div>
+      {{if .Labels}}<div class="row-labels">{{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span> {{end}}</div>{{end}}
+      {{if .Parent}}<div class="row-parent">parent: <a href="{{.ParentURL}}" hx-get="{{.ParentURL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true" title="{{.Parent.Title}}">#{{.Parent.Number}}</a></div>{{end}}
+      {{with .Waiting}}<div class="row-waiting">{{.}}</div>{{end}}
+      {{with .Holder}}<div class="row-held-by held-by">held by: {{template "holder" .}}</div>{{end}}
+      <time class="updated" datetime="{{iso .UpdatedAt}}">{{ago .UpdatedAt}}</time>
     </li>
     {{else}}<li class="empty">No Issues match.</li>{{end}}
   </ul>

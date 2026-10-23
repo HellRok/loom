@@ -29,7 +29,7 @@ func TestIssueWithOpenChildrenShowsAsBlocked(t *testing.T) {
 			t.Fatalf("%s never read %q", expr, want)
 		}
 	}
-	waiting := `document.querySelector("#list-pane #row-1 .waiting")?.textContent ?? ""`
+	waiting := `document.querySelector("#list-pane #row-1 .row-waiting")?.textContent ?? ""`
 	poll(rowStatus(1), "status-blocked")
 	poll(waiting, "waiting on 1 open child")
 	poll(rowStatus(2), "status-open")
