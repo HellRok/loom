@@ -201,8 +201,8 @@ func (s *server) render(w http.ResponseWriter, r *http.Request, status int, page
 			name = "list-pane"
 		case "issue-pane":
 			name = "issue-pane"
-		case "home-pane":
-			name = "home-pane"
+		case "home-pane", "glossary-pane", "sessions-pane", "session-pane":
+			name = r.Header.Get("HX-Target")
 		}
 	}
 	var buf bytes.Buffer

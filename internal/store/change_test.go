@@ -80,3 +80,39 @@ func TestChangesReportedAfterCommit(t *testing.T) {
 	}
 	check("an existing label changes nothing")
 }
+
+// TestTouchSessionReportsOnlyAFirstSighting checks that a newly seen Session
+// is reported as a Change in no Project, and later touches are not, so tool
+// calls don't make every open page refresh.
+func TestTouchSessionReportsOnlyAFirstSighting(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "loom.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	var got []store.Change
+	st.OnChange(func(c store.Change) { got = append(got, c) })
+
+	if err := st.TouchSession(ctx, "sess-1"); err != nil {
+		t.Fatal(err)
+	}
+	if want := []store.Change{{}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("first touch: changes = %v, want %v", got, want)
+	}
+	got = nil
+
+	if err := st.TouchSession(ctx, "sess-1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("repeat touch: changes = %v, want none", got)
+	}
+
+	if err := st.TouchSession(ctx, "sess-2"); err != nil {
+		t.Fatal(err)
+	}
+	if want := []store.Change{{}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("another Session: changes = %v, want %v", got, want)
+	}
+}

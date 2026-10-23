@@ -1,4 +1,6 @@
-{{define "main"}}<section class="glossary" id="glossary-pane">
+{{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/{{.Slug}}/events">{{template "glossary-pane" .}}</div>{{end}}
+
+{{define "glossary-pane"}}<section class="glossary" id="glossary-pane" data-live hx-get="/{{.Slug}}/glossary" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
 <p class="muted"><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a></p>
 <h1>Glossary</h1>
 {{if .Empty}}<p class="empty">No Glossary yet.</p>{{else}}<div class="body">{{.Body}}</div>{{end}}

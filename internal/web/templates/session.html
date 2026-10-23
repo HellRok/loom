@@ -1,4 +1,6 @@
-{{define "main"}}<section class="session" id="session-pane">
+{{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/events">{{template "session-pane" .}}</div>{{end}}
+
+{{define "session-pane"}}<section class="session" id="session-pane" data-live hx-get="{{.Holder.URL}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
 <h1>Session <span title="{{.Session.ID}}">{{.Holder.Short}}</span></h1>
 <p class="meta"><code class="full-id">{{.Session.ID}}</code> · <span class="idle">{{.Holder.Idle}}</span> · last seen <time datetime="{{iso .Session.LastSeen}}">{{ago .Session.LastSeen}}</time> · first seen <time datetime="{{iso .Session.FirstSeen}}">{{time .Session.FirstSeen}}</time></p>
 <h2>Holds</h2>
