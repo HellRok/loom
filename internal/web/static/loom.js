@@ -19,18 +19,3 @@ document.body.addEventListener("htmx:afterSwap", function (e) {
   var nav = e.detail.target.id === "main" && document.getElementById("nav");
   if (nav) nav.scrollTop = navScroll;
 });
-
-// Following a link swaps only the Issue pane, so the list's selected row goes
-// stale. Once the address has changed, refetch the list for it. The list is
-// the request's source so the morph extension, set on the panes, applies.
-var issueLinkSwap = false;
-document.body.addEventListener("htmx:beforeSwap", function (e) {
-  issueLinkSwap = e.detail.target.id === "issue-pane" && e.detail.requestConfig.elt.hasAttribute("hx-push-url");
-});
-document.body.addEventListener("htmx:pushedIntoHistory", function () {
-  var list = document.getElementById("list-pane");
-  if (issueLinkSwap && list) {
-    htmx.ajax("GET", location.pathname + location.search, { source: list, target: list, swap: "morph:outerHTML" });
-  }
-  issueLinkSwap = false;
-});

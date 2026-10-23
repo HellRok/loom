@@ -44,7 +44,10 @@ func TestLiveMarkup(t *testing.T) {
 	if got := attr(doc, "#nav", "hx-trigger"); got != refresh {
 		t.Errorf("sidebar refreshes on %q", got)
 	}
-	if got := attr(doc, "#list-pane", "hx-trigger"); got != refresh {
+	// The list also refreshes after a link swaps the Issue pane and pushes its
+	// URL, so its selected row follows.
+	const listRefresh = refresh + ", htmx:afterSwap from:body [detail.target.id=='issue-pane' && detail.requestConfig.elt.hasAttribute('hx-push-url')]"
+	if got := attr(doc, "#list-pane", "hx-trigger"); got != listRefresh {
 		t.Errorf("list refreshes on %q", got)
 	}
 	if got := attr(doc, "#issue-pane", "hx-trigger"); got != "sse:issue-2, htmx:sseOpen from:body" {
