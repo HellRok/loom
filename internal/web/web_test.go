@@ -502,7 +502,7 @@ func TestStatic(t *testing.T) {
 
 var sessOther = store.Actor{Name: "Tess Ter", Session: "other-session-00007f3a"}
 
-// seedFrontier adds to seed's Project: ready-for-human #5, untagged #6,
+// seedFrontier adds to seed's Project: ready-for-human #5, no readiness label #6,
 // ready-for-agent #7 held by another Session, and ready-for-agent #8 blocked
 // by #6.
 func seedFrontier(t *testing.T) *fixture {
@@ -515,9 +515,9 @@ func seedFrontier(t *testing.T) *fixture {
 		}
 	}
 	mk("Human decides", nil, "ready-for-human")
-	mk("Untagged", nil)
+	mk("No readiness label", nil)
 	mk("Held by someone", nil, "ready-for-agent")
-	mk("Waits on untagged", []int64{6}, "ready-for-agent")
+	mk("Waits on the unlabelled one", []int64{6}, "ready-for-agent")
 	if _, _, err := f.st.ClaimIssue(ctx, "loom", 7, sessOther); err != nil {
 		t.Fatal(err)
 	}
