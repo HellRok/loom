@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -236,5 +237,164 @@ func TestInitSkipsLabelsWithoutTheTriageDoc(t *testing.T) {
 	}
 	if !strings.Contains(out, "AGENTS.md: updated") {
 		t.Errorf("AGENTS.md not updated:\n%s", out)
+	}
+}
+
+// tree maps every file under dir (outside .git) to its contents.
+func tree(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && d.Name() == ".git" {
+			return filepath.SkipDir
+		}
+		if !d.IsDir() {
+			files[p] = slurp(t, p)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
+func TestStandaloneInitWritesNothingUnderTheRoot(t *testing.T) {
+	cases := map[string]map[string]string{
+		"no setup":              {"README.md": "hello"},
+		"points at another one": {"CLAUDE.md": setupClaude, "docs/agents/issue-tracker.md": "GitHub", "docs/agents/triage-labels.md": triageLabels},
+	}
+	for name, files := range cases {
+		t.Run(name, func(t *testing.T) {
+			in := newInstall(t)
+			repo := newRepo(t, "widget", files)
+			before := tree(t, repo)
+
+			out, err := in.initIn(repo, "--standalone")
+			if err != nil {
+				t.Fatalf("loom init --standalone: %v\n%s", err, out)
+			}
+			for _, want := range []string{
+				"project widget: created",
+				"standalone: yes",
+				`"mcpServers"`,
+				"overrides checked-in skill config",
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("output lacks %q:\n%s", want, out)
+				}
+			}
+			if strings.Contains(out, "label") {
+				t.Errorf("mentioned labels:\n%s", out)
+			}
+			if after := tree(t, repo); !reflect.DeepEqual(before, after) {
+				t.Errorf("files under the Root changed:\nbefore %v\nafter  %v", before, after)
+			}
+			list := call(t, in.shim(), "list_projects", nil)["projects"].([]any)
+			if len(list) != 1 || list[0].(map[string]any)["standalone"] != true {
+				t.Errorf("Project not marked standalone: %v", list)
+			}
+		})
+	}
+}
+
+func TestUsageDescribesStandaloneAndNoLongerRequiresSetup(t *testing.T) {
+	in := newInstall(t)
+	for name, args := range map[string][]string{"loom": nil, "loom init -h": {"init", "-h"}} {
+		out, _ := in.command(args...).CombinedOutput()
+		text := string(out)
+		if strings.Contains(text, "after /setup-matt-pocock-skills") {
+			t.Errorf("%s still says init requires setup:\n%s", name, text)
+		}
+		if !strings.Contains(text, "standalone") {
+			t.Errorf("%s doesn't describe --standalone:\n%s", name, text)
+		}
+	}
+}
+
+func TestStandaloneInitIsIdempotentAndPlainInitClearsIt(t *testing.T) {
+	in := newInstall(t)
+	files := map[string]string{
+		"CLAUDE.md":                    setupClaude,
+		"docs/agents/issue-tracker.md": "old doc",
+		"docs/agents/triage-labels.md": triageLabels,
+	}
+	repo := newRepo(t, "widget", files)
+	standalone := func() any {
+		return call(t, in.shim(), "list_projects", nil)["projects"].([]any)[0].(map[string]any)["standalone"]
+	}
+
+	if out, err := in.initIn(repo, "--standalone"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	before := tree(t, repo)
+	if standalone() != true { // also connects an agent Session
+		t.Fatal("first --standalone didn't mark the Project")
+	}
+	out, err := in.initIn(repo, "--standalone")
+	if err != nil {
+		t.Fatalf("second --standalone: %v\n%s", err, out)
+	}
+	for _, want := range []string{"project widget: already exists", "standalone: yes", "Reminder:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("second output lacks %q:\n%s", want, out)
+		}
+	}
+	if !reflect.DeepEqual(before, tree(t, repo)) || standalone() != true {
+		t.Errorf("re-running changed something: standalone=%v", standalone())
+	}
+
+	out, err = in.initIn(repo)
+	if err != nil {
+		t.Fatalf("plain init: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "standalone: cleared") || standalone() != nil {
+		t.Errorf("plain init didn't clear Standalone (%v):\n%s", standalone(), out)
+	}
+	if out, err = in.initIn(repo); err != nil || strings.Contains(out, "standalone") {
+		t.Errorf("plain init on a plain Project mentioned standalone (%v):\n%s", err, out)
+	}
+
+	// Switching back keeps every file the plain init wrote.
+	before = tree(t, repo)
+	out, err = in.initIn(repo, "--standalone")
+	if err != nil || !strings.Contains(out, "standalone: yes") || standalone() != true {
+		t.Fatalf("--standalone on a plain Project: %v\n%s", err, out)
+	}
+	if !reflect.DeepEqual(before, tree(t, repo)) {
+		t.Error("switching to Standalone changed files in the repo")
+	}
+}
+
+func TestStandaloneInitHonoursSlugHints(t *testing.T) {
+	in := newInstall(t)
+	plain, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := in.initIn(plain, "--standalone")
+	if err == nil || !strings.Contains(out, "--slug") {
+		t.Fatalf("want a --slug hint outside git, got %v:\n%s", err, out)
+	}
+	if out, err := in.initIn(plain, "--standalone", "--slug", "plain"); err != nil || !strings.Contains(out, "project plain: created") {
+		t.Fatalf("with --slug: %v\n%s", err, out)
+	}
+
+	a := newRepo(t, "dup", nil)
+	b := newRepo(t, "dup", nil)
+	if out, err := in.initIn(a, "--standalone"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if out, err := in.initIn(b, "--standalone"); err == nil || !strings.Contains(out, "--slug") {
+		t.Fatalf("want a --slug hint on collision, got %v:\n%s", err, out)
+	}
+	if out, err := in.initIn(b, "--standalone", "--slug", "dup-two"); err != nil || !strings.Contains(out, "project dup-two: created") {
+		t.Fatalf("collision with --slug: %v\n%s", err, out)
+	}
+	if got := tree(t, plain); len(got) != 0 {
+		t.Errorf("wrote under the Root: %v", got)
 	}
 }

@@ -20,11 +20,14 @@ type projectOut struct {
 	// RootMissing flags a Root that no longer exists on disk, as after the
 	// repo moved: the cue to call move_project instead of create_project.
 	RootMissing bool `json:"root_missing,omitempty"`
+	// Standalone marks a Project whose skill config lives in Loom, not in
+	// the repo.
+	Standalone bool `json:"standalone,omitempty"`
 }
 
 func toProjectOut(p store.Project) projectOut {
 	_, err := os.Stat(p.Root)
-	return projectOut{Slug: p.Slug, Root: p.Root, RootMissing: errors.Is(err, os.ErrNotExist)}
+	return projectOut{Slug: p.Slug, Root: p.Root, RootMissing: errors.Is(err, os.ErrNotExist), Standalone: p.Standalone}
 }
 
 func toProjectOuts(ps []store.Project) []projectOut {
@@ -154,6 +157,34 @@ func (h *handlers) moveProject(ctx context.Context, c call, in moveProjectIn) (p
 		return projectOut{}, err
 	}
 	return toProjectOut(moved), nil
+}
+
+type setStandaloneIn struct {
+	Common
+	Standalone bool `json:"standalone" jsonschema:"true to mark the Project Standalone, false to clear it"`
+}
+
+type setStandaloneOut struct {
+	projectOut
+	Already bool `json:"already"`
+}
+
+// setStandalone marks the Project Standalone or clears it; `loom init` calls
+// it so the flag is set through the same tools as everything else.
+func (h *handlers) setStandalone(ctx context.Context, c call, in setStandaloneIn) (setStandaloneOut, error) {
+	p, err := h.resolveProject(ctx, c)
+	if err != nil {
+		return setStandaloneOut{}, err
+	}
+	already, err := h.store.SetStandalone(ctx, p.Slug, in.Standalone)
+	if errors.Is(err, store.ErrNotFound) {
+		// The Project can vanish between the lookup and the update.
+		return setStandaloneOut{}, h.unknownProject(ctx, p.Slug)
+	} else if err != nil {
+		return setStandaloneOut{}, err
+	}
+	p.Standalone = in.Standalone
+	return setStandaloneOut{projectOut: toProjectOut(p), Already: already}, nil
 }
 
 type deleteProjectIn struct {

@@ -22,7 +22,7 @@ const usage = `usage: loom <command> [flags]
 
 commands:
   mcp     serve MCP over stdio, starting the daemon if needed
-  init    install Loom as this repo's issue tracker (after /setup-matt-pocock-skills)
+  init    install Loom as this repo's issue tracker (--standalone: without touching the repo)
   stop    stop the daemon
   project move or delete a Project (mv, rm)
   serve   run the daemon (normally started for you by the shim)

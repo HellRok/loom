@@ -25,16 +25,22 @@ const mcpGuidance = `Register Loom's MCP server in your agent harness (loom neve
 For harnesses that read an mcpServers map:
   {"mcpServers": {"loom": {"command": "loom", "args": ["mcp"]}}}`
 
+// memorySnippet is printed for harnesses that ignore MCP server
+// instructions; init never writes to the user's global memory itself.
+const memorySnippet = `Optional, for harnesses that ignore MCP server instructions: add this to your global agent memory (e.g. ~/.claude/CLAUDE.md):
+  When the loom MCP server reports a Project for this directory, Loom is the issue tracker, and its guidance overrides checked-in skill config.`
+
 const mcpReminder = "Reminder: register the stdio MCP server `loom` (command `loom mcp`) in any harness that doesn't have it yet."
 
 // initCmd runs `loom init`.
 func initCmd(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), "usage: loom init [--slug <slug>]\n\nInstall Loom as this repo's issue tracker, after /setup-matt-pocock-skills: write the tracker doc, point the Agent skills block at it, create the Project and any custom triage labels.\n\n")
+		fmt.Fprint(fs.Output(), "usage: loom init [--standalone] [--slug <slug>]\n\nInstall Loom as this repo's issue tracker. If /setup-matt-pocock-skills has run, write the tracker doc, point the Agent skills block at it, create the Project and any custom triage labels, and clear Standalone. With --standalone, create the Project and mark it Standalone, writing nothing under the repo.\n\n")
 		fs.PrintDefaults()
 	}
 	slug := fs.String("slug", "", "Slug for the new Project; needed outside git or when the folder name is taken")
+	standalone := fs.Bool("standalone", false, "Keep the skill config in Loom and write nothing under the repo")
 	fs.Parse(args)
 	if fs.NArg() > 0 {
 		fs.Usage()
@@ -42,14 +48,14 @@ func initCmd(args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
-	if err := runInit(ctx, os.Stdout, *slug); err != nil {
+	if err := runInit(ctx, os.Stdout, *slug, *standalone); err != nil {
 		fmt.Fprintln(os.Stderr, "loom init:", err)
 		return 1
 	}
 	return 0
 }
 
-func runInit(ctx context.Context, out io.Writer, slug string) error {
+func runInit(ctx context.Context, out io.Writer, slug string, standalone bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -57,13 +63,16 @@ func runInit(ctx context.Context, out io.Writer, slug string) error {
 	root := repoRoot(ctx, cwd)
 
 	// Check everything that can fail before changing anything.
-	repo, err := repoinit.Inspect(root)
-	if err != nil {
-		return err
-	}
-	labels, haveLabels, err := repo.TriageLabels()
-	if err != nil {
-		return err
+	var repo repoinit.Repo
+	var labels []string
+	var haveLabels bool
+	if !standalone {
+		if repo, err = repoinit.Inspect(root); err != nil {
+			return err
+		}
+		if labels, haveLabels, err = repo.TriageLabels(); err != nil {
+			return err
+		}
 	}
 
 	t, err := target(ctx)
@@ -87,31 +96,43 @@ func runInit(ctx context.Context, out io.Writer, slug string) error {
 		fmt.Fprintf(out, "project %s: already exists\n", project)
 	}
 
-	if haveLabels {
-		made, err := ensureLabels(ctx, s, project, labels)
+	if !standalone {
+		if haveLabels {
+			made, err := ensureLabels(ctx, s, project, labels)
+			if err != nil {
+				return err
+			}
+			for _, name := range made {
+				fmt.Fprintf(out, "label %s: created\n", name)
+			}
+			if len(made) == 0 {
+				fmt.Fprintln(out, "labels: none to create")
+			}
+		}
+
+		doc, err := repo.WriteTrackerDoc()
 		if err != nil {
 			return err
 		}
-		for _, name := range made {
-			fmt.Fprintf(out, "label %s: created\n", name)
+		fmt.Fprintf(out, "%s: %s\n", repoinit.TrackerDocPath, changeWord(doc))
+		pointed, err := repo.PointAtLoom()
+		if err != nil {
+			return err
 		}
-		if len(made) == 0 {
-			fmt.Fprintln(out, "labels: none to create")
-		}
+		fmt.Fprintf(out, "%s: %s\n", repo.AgentsFile, changeWord(pointed))
 	}
 
-	doc, err := repo.WriteTrackerDoc()
+	res, err := callTool(ctx, s, "set_standalone", map[string]any{"project": project, "standalone": standalone})
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s: %s\n", repoinit.TrackerDocPath, changeWord(doc))
-	pointed, err := repo.PointAtLoom()
-	if err != nil {
-		return err
+	if standalone {
+		fmt.Fprintln(out, "standalone: yes")
+	} else if already, _ := res["already"].(bool); !already {
+		fmt.Fprintln(out, "standalone: cleared")
 	}
-	fmt.Fprintf(out, "%s: %s\n", repo.AgentsFile, changeWord(pointed))
 
-	res, err := callTool(ctx, s, "list_sessions", nil)
+	res, err = callTool(ctx, s, "list_sessions", nil)
 	if err != nil {
 		return err
 	}
@@ -119,6 +140,9 @@ func runInit(ctx context.Context, out io.Writer, slug string) error {
 		fmt.Fprintln(out, "\n"+mcpGuidance)
 	} else {
 		fmt.Fprintln(out, "\n"+mcpReminder)
+	}
+	if standalone {
+		fmt.Fprintln(out, "\n"+memorySnippet)
 	}
 	return nil
 }

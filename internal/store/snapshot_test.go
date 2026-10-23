@@ -193,7 +193,7 @@ func TestOpenMigratesEverySnapshotWithItsDataIntact(t *testing.T) {
 			}
 			defer st.Close()
 
-			if ps, err := st.Projects(ctx); err != nil || len(ps) != 1 || ps[0].Slug != "demo" || ps[0].Root != root {
+			if ps, err := st.Projects(ctx); err != nil || len(ps) != 1 || ps[0].Slug != "demo" || ps[0].Root != root || ps[0].Standalone {
 				t.Fatalf("projects = %v, %v", ps, err)
 			}
 			if i, err := st.Issue(ctx, "demo", 2); err != nil ||

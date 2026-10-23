@@ -439,6 +439,9 @@
         },
         "slug": {
           "type": "string"
+        },
+        "standalone": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1141,6 +1144,9 @@
               },
               "slug": {
                 "type": "string"
+              },
+              "standalone": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -1242,6 +1248,9 @@
         },
         "slug": {
           "type": "string"
+        },
+        "standalone": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1444,6 +1453,57 @@
       "required": [
         "ref",
         "parent"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Mark a Project Standalone (its skill config lives in Loom, not the repo) or clear that. Setting what is already set changes nothing and returns already: true.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "standalone": {
+          "description": "true to mark the Project Standalone, false to clear it",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "standalone"
+      ],
+      "type": "object"
+    },
+    "name": "set_standalone",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "already": {
+          "type": "boolean"
+        },
+        "root": {
+          "type": "string"
+        },
+        "root_missing": {
+          "type": "boolean"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "standalone": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "slug",
+        "root",
+        "already"
       ],
       "type": "object"
     }

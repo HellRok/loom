@@ -9,8 +9,9 @@ import (
 
 // Project is one tracked codebase, anchored at its Root.
 type Project struct {
-	Slug string
-	Root string
+	Slug       string
+	Root       string
+	Standalone bool
 }
 
 // CreateProject registers a Project. Slugs and Roots are unique.
@@ -53,7 +54,7 @@ func (s *Store) CreateProject(ctx context.Context, slug, root string) (Project, 
 
 // Projects lists every Project, ordered by Slug.
 func (s *Store) Projects(ctx context.Context) ([]Project, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT slug, root FROM projects ORDER BY slug`)
+	rows, err := s.db.QueryContext(ctx, `SELECT slug, root, standalone FROM projects ORDER BY slug`)
 	if err != nil {
 		return nil, fmt.Errorf("listing projects: %w", err)
 	}
@@ -61,7 +62,7 @@ func (s *Store) Projects(ctx context.Context) ([]Project, error) {
 	ps := []Project{}
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.Slug, &p.Root); err != nil {
+		if err := rows.Scan(&p.Slug, &p.Root, &p.Standalone); err != nil {
 			return nil, fmt.Errorf("listing projects: %w", err)
 		}
 		ps = append(ps, p)
@@ -75,7 +76,7 @@ func (s *Store) Projects(ctx context.Context) ([]Project, error) {
 // ProjectBySlug finds one Project, or returns ErrNotFound.
 func (s *Store) ProjectBySlug(ctx context.Context, slug string) (Project, error) {
 	p := Project{Slug: slug}
-	err := s.db.QueryRowContext(ctx, `SELECT root FROM projects WHERE slug = ?`, slug).Scan(&p.Root)
+	err := s.db.QueryRowContext(ctx, `SELECT root, standalone FROM projects WHERE slug = ?`, slug).Scan(&p.Root, &p.Standalone)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Project{}, ErrNotFound
 	}
@@ -83,6 +84,27 @@ func (s *Store) ProjectBySlug(ctx context.Context, slug string) (Project, error)
 		return Project{}, fmt.Errorf("reading project %q: %w", slug, err)
 	}
 	return p, nil
+}
+
+// SetStandalone marks a Project Standalone or not, reporting already when it
+// was set that way. An unknown Slug is ErrNotFound.
+func (s *Store) SetStandalone(ctx context.Context, slug string, standalone bool) (already bool, err error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE projects SET standalone = ? WHERE slug = ? AND standalone != ?`, standalone, slug, standalone)
+	if err != nil {
+		return false, fmt.Errorf("updating project %q: %w", slug, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("updating project %q: %w", slug, err)
+	}
+	if n == 0 {
+		if _, err := s.ProjectBySlug(ctx, slug); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	s.notify(slug)
+	return false, nil
 }
 
 // DeleteProject hard-deletes a Project and, by cascade, everything in it.
