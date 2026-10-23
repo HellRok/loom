@@ -8,12 +8,11 @@
   <form class="filter" method="get" action="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">
     {{if ne .View .DefaultView}}<input type="hidden" name="view" value="{{.View}}">{{end}}
     {{range .Labels}}<input type="hidden" name="label" value="{{.}}">{{end}}
-    {{if .Untagged}}<input type="hidden" name="untagged" value="1">{{end}}
     <input type="search" name="q" value="{{.Q}}" placeholder="Filter by title" aria-label="Filter by title">
     <button type="submit">Filter</button>
-    {{if or .Q .Labels .Untagged}}<a class="clear" href="{{.Clear}}" hx-get="{{.Clear}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">clear</a>{{end}}
+    {{if or .Q .Labels}}<a class="clear" href="{{.Clear}}" hx-get="{{.Clear}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">clear</a>{{end}}
   </form>
-  <p class="active-filters">{{len .Rows}} shown{{if .Labels}} · labels: {{range .Labels}}<span class="chip">{{.}}</span>{{end}}{{end}}{{if .Untagged}} · <span class="chip">untagged</span>{{end}}{{if .Q}} · matching <span class="chip">{{.Q}}</span>{{end}}</p>
+  <p class="active-filters">{{len .Rows}} shown{{if .Labels}} · labels: {{range .Labels}}<span class="chip">{{.}}</span>{{end}}{{end}}{{if .Q}} · matching <span class="chip">{{.Q}}</span>{{end}}</p>
   <ul class="rows">
     {{range .Rows}}
     <li class="row status-{{.Status}}{{if .Selected}} selected{{end}}" id="row-{{.Number}}">

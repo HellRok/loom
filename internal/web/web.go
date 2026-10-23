@@ -335,25 +335,17 @@ var views = []struct {
 type filters struct {
 	View   string
 	Labels []string
-	// Untagged keeps only Issues carrying neither readiness label.
-	Untagged bool
-	Q        string
+	Q      string
 }
 
-// readyForAgent and readyForHuman are the labels that say who an Issue is
-// ready for.
-const (
-	readyForAgent = "ready-for-agent"
-	readyForHuman = "ready-for-human"
-)
-
-var readyLabels = []string{readyForAgent, readyForHuman}
+// readyForAgent is the label that says an Issue is ready for an agent.
+const readyForAgent = "ready-for-agent"
 
 // viewFrontier is the key of the Frontier saved view.
 const viewFrontier = "frontier"
 
 func parseFilters(q url.Values) filters {
-	f := filters{View: views[0].Key, Labels: q["label"], Untagged: q.Get("untagged") == "1", Q: strings.TrimSpace(q.Get("q"))}
+	f := filters{View: views[0].Key, Labels: q["label"], Q: strings.TrimSpace(q.Get("q"))}
 	for _, v := range views {
 		if q.Get("view") == v.Key {
 			f.View = v.Key
@@ -370,9 +362,6 @@ func (f filters) query() string {
 	}
 	for _, l := range f.Labels {
 		v.Add("label", l)
-	}
-	if f.Untagged {
-		v.Set("untagged", "1")
 	}
 	if f.Q != "" {
 		v.Set("q", f.Q)
@@ -416,9 +405,6 @@ func (f filters) issueFilter() store.IssueFilter {
 		if !slices.Contains(out.Labels, l) {
 			out.Labels = append(out.Labels, l)
 		}
-	}
-	if f.Untagged {
-		out.NotLabels = readyLabels
 	}
 	return out
 }
@@ -612,7 +598,7 @@ type projectLists struct {
 // projectData is the data of the navigation and list panes of Project slug
 // under filters f, with Issue selected marked in the list.
 func (s *server) projectData(ctx context.Context, slug string, proj store.Project, f filters, selected int64) (map[string]any, projectLists, error) {
-	data := map[string]any{"Slug": slug, "Standalone": proj.Standalone, "Title": slug, "Q": f.Q, "View": f.View, "DefaultView": views[0].Key, "Labels": f.Labels, "Untagged": f.Untagged}
+	data := map[string]any{"Slug": slug, "Standalone": proj.Standalone, "Title": slug, "Q": f.Q, "View": f.View, "DefaultView": views[0].Key, "Labels": f.Labels}
 
 	sums, err := s.Store.ProjectSummaries(ctx)
 	if err != nil {
@@ -675,7 +661,7 @@ func (s *server) projectData(ctx context.Context, slug string, proj store.Projec
 }
 
 // viewCount is the number of rows the list would show under f: its View
-// narrowed by the Labels, untagged and title filters.
+// narrowed by the Labels and title filter.
 func (s *server) viewCount(ctx context.Context, slug string, f filters) (int, error) {
 	if f.Q == "" {
 		_, n, err := s.Store.Issues(ctx, slug, withLimit(f.issueFilter(), 1))

@@ -535,11 +535,10 @@ func TestFrontierView(t *testing.T) {
 		expect(t, doc, ".frontier-counts", 0)
 	})
 
-	t.Run("label and untagged URL filters narrow the list", func(t *testing.T) {
+	t.Run("label URL filters narrow the list", func(t *testing.T) {
 		for _, c := range []struct{ query, rows string }{
 			{"view=frontier&label=ready-for-agent", "#3"},
 			{"view=frontier&label=ready-for-human", "#5"},
-			{"view=frontier&untagged=1", "#6"},
 		} {
 			_, doc := f.get("/loom?"+c.query, "")
 			if got := rowNumbers(doc); got != c.rows {
@@ -767,7 +766,7 @@ func TestSidebarViewLinksKeepTheFilters(t *testing.T) {
 	f := seed(t)
 	for _, c := range []struct{ name, query, want string }{
 		{"a label", "label=bug", "/loom?label=bug /loom?label=bug&view=frontier /loom?label=bug&view=open /loom?label=bug&view=in-progress /loom?label=bug&view=blocked /loom?label=bug&view=needs-triage /loom?label=bug&view=closed"},
-		{"labels, untagged and a title filter", "view=open&label=bug&label=wayfinder:task&untagged=1&q=fix", "/loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1 /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=frontier /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=open /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=in-progress /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=blocked /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=needs-triage /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=closed"},
+		{"labels and a title filter", "view=open&label=bug&label=wayfinder:task&q=fix", "/loom?label=bug&label=wayfinder%3Atask&q=fix /loom?label=bug&label=wayfinder%3Atask&q=fix&view=frontier /loom?label=bug&label=wayfinder%3Atask&q=fix&view=open /loom?label=bug&label=wayfinder%3Atask&q=fix&view=in-progress /loom?label=bug&label=wayfinder%3Atask&q=fix&view=blocked /loom?label=bug&label=wayfinder%3Atask&q=fix&view=needs-triage /loom?label=bug&label=wayfinder%3Atask&q=fix&view=closed"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, doc := f.get("/loom?"+c.query, "")
@@ -793,7 +792,6 @@ func TestSidebarViewCountsFollowTheFilters(t *testing.T) {
 		{"a label", "label=bug", "0 1 1 0 0 0 0"},
 		{"a label, from another view", "view=closed&label=bug", "0 1 1 0 0 0 0"},
 		{"a title filter", "q=web", "0 0 1 0 1 1 0"},
-		{"untagged", "untagged=1", "1 0 2 0 1 1 1"},
 		{"a label and a title filter", "label=bug&q=web", "0 0 0 0 0 0 0"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -802,5 +800,24 @@ func TestSidebarViewCountsFollowTheFilters(t *testing.T) {
 				t.Errorf("view counts = %s, want %s", got, c.want)
 			}
 		})
+	}
+}
+
+// An untagged=1 left in an old URL does nothing.
+func TestUntaggedParameterIsIgnored(t *testing.T) {
+	f := seedFrontier(t)
+	for _, view := range []string{"frontier", "open"} {
+		_, plain := f.get("/loom?view="+view, "")
+		_, doc := f.get("/loom?view="+view+"&untagged=1", "")
+		if got, want := rowNumbers(doc), rowNumbers(plain); got != want {
+			t.Errorf("%s lists %q, want %q", view, got, want)
+		}
+		if got, want := viewCounts(doc), viewCounts(plain); got != want {
+			t.Errorf("%s View counts = %s, want %s", view, got, want)
+		}
+		if got, want := viewLinks(doc), viewLinks(plain); got != want {
+			t.Errorf("%s View links = %s, want %s", view, got, want)
+		}
+		expect(t, doc, "input[name=untagged], .active-filters .chip, a.clear", 0)
 	}
 }

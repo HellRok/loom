@@ -88,7 +88,7 @@ Some harnesses ignore MCP server instructions. For those, `loom init` prints an 
 
 ## The web UI
 
-The sidebar gives views over a Project's Issues (Maps, Frontier, Open, In progress, Blocked, Needs triage, Closed), its Labels, and, for Standalone Projects, its Glossary. Selected Labels, the title filter and the untagged filter narrow every View's count, and following a View keeps them. A Label's count is the number of Issues in the current View, so narrowed, that carry it.
+The sidebar gives views over a Project's Issues (Maps, Frontier, Open, In progress, Blocked, Needs triage, Closed), its Labels, and, for Standalone Projects, its Glossary. Selected Labels and the title filter narrow every View's count, and following a View keeps them. A Label's count is the number of Issues in the current View, so narrowed, that carry it.
 
 - **Frontier**: the open, unblocked, unclaimed Issues, in creation order. This is what an agent takes next.
 - **Maps**: a wayfinder effort indexed as one Issue. The Board tab sorts its Tickets into Frontier, Claimed, and Blocked; the Decided tab (above) lists the closed Tickets with a gist of each answer.
