@@ -239,3 +239,12 @@ func TestServeExitsWhenTheDatabaseCannotBeUsed(t *testing.T) {
 		}
 	}
 }
+
+func TestHelpReportsTheVersion(t *testing.T) {
+	in := newInstall(t)
+	out := in.loom("-h")
+	first, _, _ := strings.Cut(out, "\n")
+	if v, ok := strings.CutPrefix(first, "loom "); !ok || v == "" {
+		t.Errorf("help should start with \"loom <version>\", got:\n%s", out)
+	}
+}

@@ -18,7 +18,9 @@ import (
 	"github.com/HellRok/loom/internal/store"
 )
 
-const usage = `usage: loom <command> [flags]
+const usage = `loom %s
+
+usage: loom <command> [flags]
 
 commands:
   mcp     serve MCP over stdio, starting the daemon if needed
@@ -32,7 +34,7 @@ Run 'loom <command> -h' for a command's flags.
 
 func main() {
 	fs := flag.NewFlagSet("loom", flag.ExitOnError)
-	fs.Usage = func() { fmt.Fprint(fs.Output(), usage) }
+	fs.Usage = func() { fmt.Fprintf(fs.Output(), usage, buildinfo.Version()) }
 	fs.Parse(os.Args[1:])
 	if fs.NArg() == 0 {
 		fs.Usage()
