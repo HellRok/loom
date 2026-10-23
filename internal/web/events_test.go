@@ -122,3 +122,66 @@ func TestClosingStreamsEndsThem(t *testing.T) {
 		}
 	}
 }
+
+// TestLiveSessionsAndGlossaryMarkup checks the Glossary page follows its
+// Project's stream, and the Sessions pages the global one, each refreshing
+// its pane with the morph swap and still rendering as a page and a fragment.
+func TestLiveSessionsAndGlossaryMarkup(t *testing.T) {
+	f := seedSessions(t)
+	const refresh = "sse:changed, htmx:sseOpen from:body"
+	for _, tc := range []struct {
+		path, pane, stream string
+	}{
+		{"/loom/glossary", "glossary-pane", "/loom/events"},
+		{"/sessions", "sessions-pane", "/events"},
+		{"/sessions/" + sessA.Session, "session-pane", "/events"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			sel := "#" + tc.pane
+			rec, doc := f.get(tc.path, "")
+			if rec.Code != 200 {
+				t.Fatalf("status %d", rec.Code)
+			}
+			expect(t, doc, "header.top", 1)
+			if got := doc.Find("[sse-connect]").AttrOr("sse-connect", ""); got != tc.stream {
+				t.Errorf("connects to %q, want %q", got, tc.stream)
+			}
+			if got := doc.Find("[sse-connect]").AttrOr("hx-ext", ""); got != "sse,morph" {
+				t.Errorf("hx-ext = %q", got)
+			}
+			expect(t, doc, "[sse-connect] "+sel, 1)
+			pane := doc.Find(sel)
+			if _, ok := pane.Attr("data-live"); !ok {
+				t.Error("pane is not data-live")
+			}
+			if got := pane.AttrOr("hx-trigger", ""); got != refresh {
+				t.Errorf("refreshes on %q", got)
+			}
+			if got := pane.AttrOr("hx-swap", ""); got != "morph:outerHTML" {
+				t.Errorf("swaps with %q", got)
+			}
+			if got := pane.AttrOr("hx-target", ""); got != "this" {
+				t.Errorf("targets %q", got)
+			}
+			if got := pane.AttrOr("hx-get", ""); got != tc.path {
+				t.Errorf("fallback hx-get = %q, want %q", got, tc.path)
+			}
+
+			// As a fragment: the pane alone, without the stream connection.
+			rec, doc = f.get(tc.path, tc.pane)
+			if rec.Code != 200 {
+				t.Fatalf("fragment status %d", rec.Code)
+			}
+			expect(t, doc, "header.top", 0)
+			expect(t, doc, sel, 1)
+			expect(t, doc, "[sse-connect]", 0)
+			if got := doc.Find(sel).AttrOr("hx-trigger", ""); got != refresh {
+				t.Errorf("fragment refreshes on %q", got)
+			}
+
+			// Navigating to the page into #main brings the connection too.
+			_, doc = f.get(tc.path, "main")
+			expect(t, doc, "[sse-connect] "+sel, 1)
+		})
+	}
+}

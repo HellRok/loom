@@ -1,4 +1,6 @@
-{{define "main"}}<section class="sessions" id="sessions-pane">
+{{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/events">{{template "sessions-pane" .}}</div>{{end}}
+
+{{define "sessions-pane"}}<section class="sessions" id="sessions-pane" data-live hx-get="/sessions" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
 <h1>Sessions</h1>
 <table class="session-list">
   <thead><tr><th>Session</th><th>Last seen</th><th>First seen</th></tr></thead>

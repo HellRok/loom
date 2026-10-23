@@ -104,13 +104,23 @@ type Session struct {
 	FirstSeen, LastSeen time.Time
 }
 
-// TouchSession records that a Session made a call.
+// TouchSession records that a Session made a call. A Session seen for the
+// first time is reported to the OnChange hook as a Change in no Project, so
+// the Sessions list can refresh; later touches are not, as every tool call
+// makes one.
 func (s *Store) TouchSession(ctx context.Context, id string) error {
 	t := now()
-	_, err := s.db.ExecContext(ctx, `
+	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO sessions (id, first_seen, last_seen) VALUES (?, ?, ?)
-		ON CONFLICT (id) DO UPDATE SET last_seen = excluded.last_seen`, id, t, t)
+		ON CONFLICT (id) DO NOTHING`, id, t, t)
 	if err != nil {
+		return fmt.Errorf("recording session %q: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n > 0 {
+		s.notify("")
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE sessions SET last_seen = ? WHERE id = ?`, t, id); err != nil {
 		return fmt.Errorf("recording session %q: %w", id, err)
 	}
 	return nil
