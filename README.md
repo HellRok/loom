@@ -70,14 +70,10 @@ command = "loom"
 args = ["mcp"]
 ```
 
-**Pi**: Pi has no built-in MCP support; use the [`pi-mcp-adapter`](https://github.com/nicobailon/pi-mcp-adapter) extension, then add Loom to `~/.config/mcp/mcp.json` (or `.mcp.json` in a repo):
+**Pi**: add to `~/.pi/mcp.json`
 
 ```sh
-pi install npm:pi-mcp-adapter
-```
-
-```json
-{"mcpServers": {"loom": {"command": "loom", "args": ["mcp"]}}}
+pi mcp add loom
 ```
 
 **Anything else** (Cursor, Gemini CLI, Windsurf, ...): most harnesses read an `mcpServers` map like the one above from their MCP config file. Use command `loom`, args `["mcp"]`.
