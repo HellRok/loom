@@ -13,11 +13,11 @@
   <ul class="views">
     {{range .Views}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}}</a></li>{{end}}
   </ul>
-  <h2>Reference</h2>
+  {{if .Standalone}}<h2>Reference</h2>
   <ul class="reference">
     <li><a href="/{{.Slug}}/glossary" hx-get="/{{.Slug}}/glossary" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">Glossary</a></li>
   </ul>
-  <h2>Labels</h2>
+  {{end}}  <h2>Labels</h2>
   <ul class="labels">
     {{range .LabelLinks}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="label label-{{.Colour}}">{{.Name}}</span></a> <span class="count">{{.Count}}</span></li>{{end}}
   </ul>

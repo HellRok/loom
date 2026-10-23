@@ -7,8 +7,18 @@ import (
 	"testing"
 )
 
+// standalone marks Project slug Standalone, the only kind the Glossary page
+// is shown for.
+func standalone(t *testing.T, f *fixture, slug string) {
+	t.Helper()
+	if _, err := f.st.SetStandalone(context.Background(), slug, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGlossaryPageRendersTheStoredGlossaryAsMarkdown(t *testing.T) {
 	f := seed(t)
+	standalone(t, f, "loom")
 	if _, err := f.st.EditGlossary(context.Background(), "loom", 0,
 		"# Loom\n\n**Widget**: a *thing*. See #2.\n\n<script>alert(1)</script>\n"); err != nil {
 		t.Fatal(err)
@@ -42,6 +52,7 @@ func TestGlossaryPageRendersTheStoredGlossaryAsMarkdown(t *testing.T) {
 
 func TestGlossaryPageShowsAnEmptyStateWhenThereIsNoGlossary(t *testing.T) {
 	f := seed(t)
+	standalone(t, f, "loom")
 	ctx := context.Background()
 
 	check := func(t *testing.T) {
@@ -70,6 +81,7 @@ func TestGlossaryPageShowsAnEmptyStateWhenThereIsNoGlossary(t *testing.T) {
 
 func TestGlossaryPageIsReadOnly(t *testing.T) {
 	f := seed(t)
+	standalone(t, f, "loom")
 	if _, err := f.st.EditGlossary(context.Background(), "loom", 0, "# Loom"); err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +91,8 @@ func TestGlossaryPageIsReadOnly(t *testing.T) {
 
 func TestGlossaryPageBelongsToItsProject(t *testing.T) {
 	f := seed(t)
+	standalone(t, f, "loom")
+	standalone(t, f, "other")
 	ctx := context.Background()
 	if _, err := f.st.EditGlossary(ctx, "loom", 0, "loom terms"); err != nil {
 		t.Fatal(err)
@@ -101,6 +115,7 @@ func TestGlossaryPageBelongsToItsProject(t *testing.T) {
 
 func TestGlossaryPageIsReachableFromTheProjectPages(t *testing.T) {
 	f := seed(t)
+	standalone(t, f, "loom")
 	_, doc := f.get("/loom", "")
 	link := doc.Find("#nav a[href='/loom/glossary']")
 	if link.Length() != 1 || link.Text() != "Glossary" {
@@ -115,4 +130,56 @@ func TestGlossaryPageIsReachableFromTheProjectPages(t *testing.T) {
 	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "<html") || text(frag, ".glossary h1") != "Glossary" {
 		t.Errorf("fragment: status %d, body %q", rec.Code, rec.Body.String())
 	}
+}
+
+func TestGlossaryPageIsNotFoundForAPlainProject(t *testing.T) {
+	f := seed(t)
+	// A Glossary kept from when the Project was Standalone stays stored but
+	// is not shown.
+	if _, err := f.st.EditGlossary(context.Background(), "loom", 0, "# Kept"); err != nil {
+		t.Fatal(err)
+	}
+	rec, doc := f.get("/loom/glossary", "")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status %d, want 404", rec.Code)
+	}
+	expect(t, doc, "main .glossary", 0)
+	if strings.Contains(rec.Body.String(), "Kept") {
+		t.Errorf("the stored Glossary leaked into the 404 page")
+	}
+}
+
+func TestGlossaryLinkIsMissingFromAPlainProjectsPages(t *testing.T) {
+	f := seed(t)
+	for _, path := range []string{"/loom", "/loom/issues/2", "/loom/issues/2?tab=comments"} {
+		_, doc := f.get(path, "")
+		expect(t, doc, "#nav a[href='/loom/glossary']", 0)
+	}
+}
+
+func TestGlossaryPageFollowsTheStandaloneFlagWithoutARestart(t *testing.T) {
+	f := seed(t)
+	ctx := context.Background()
+	for _, path := range []string{"/loom", "/loom/issues/2"} {
+		_, doc := f.get(path, "")
+		expect(t, doc, "#nav a[href='/loom/glossary']", 0)
+	}
+
+	standalone(t, f, "loom")
+	if rec, _ := f.get("/loom/glossary", ""); rec.Code != http.StatusOK {
+		t.Errorf("Standalone: status %d, want 200", rec.Code)
+	}
+	for _, path := range []string{"/loom", "/loom/issues/2"} {
+		_, doc := f.get(path, "")
+		expect(t, doc, "#nav a[href='/loom/glossary']", 1)
+	}
+
+	if _, err := f.st.SetStandalone(ctx, "loom", false); err != nil {
+		t.Fatal(err)
+	}
+	if rec, _ := f.get("/loom/glossary", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("plain again: status %d, want 404", rec.Code)
+	}
+	_, doc := f.get("/loom", "")
+	expect(t, doc, "#nav a[href='/loom/glossary']", 0)
 }

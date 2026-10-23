@@ -3,13 +3,25 @@ package web
 import (
 	"net/http"
 	"strings"
+
+	"github.com/HellRok/loom/internal/store"
 )
 
 // glossaryPage serves /<slug>/glossary: the Project's Glossary rendered as
 // Markdown, or an empty state if none has been written. An unknown Project
-// is a 404. It is read-only: agents write the Glossary through the MCP
+// is a 404, and so is a plain one: only a Standalone Project's Glossary is
+// shown, though a stored one is kept. It is read-only: agents write the Glossary through the MCP
 // tools.
 func (s *server) glossaryPage(w http.ResponseWriter, r *http.Request, slug string) {
+	p, err := s.Store.ProjectBySlug(r.Context(), slug)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !p.Standalone {
+		s.fail(w, r, store.ErrNotFound)
+		return
+	}
 	g, err := s.Store.Glossary(r.Context(), slug)
 	if err != nil {
 		s.fail(w, r, err)

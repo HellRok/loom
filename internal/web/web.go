@@ -468,13 +468,14 @@ type commentView struct {
 // selected shown on the right when it isn't 0.
 func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string, selected int64) {
 	ctx := r.Context()
-	if _, err := s.Store.ProjectBySlug(ctx, slug); err != nil {
+	proj, err := s.Store.ProjectBySlug(ctx, slug)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	f := parseFilters(r.URL.Query())
 
-	data := map[string]any{"Slug": slug, "Title": slug, "Q": f.Q, "View": f.View, "Labels": f.Labels}
+	data := map[string]any{"Slug": slug, "Standalone": proj.Standalone, "Title": slug, "Q": f.Q, "View": f.View, "Labels": f.Labels}
 
 	sums, err := s.Store.ProjectSummaries(ctx)
 	if err != nil {
