@@ -101,6 +101,15 @@ progress { width: 10rem; vertical-align: middle; }
 .diff .same { color: var(--muted); }
 .diff .same::before { content: "  "; }
 
+/* Wide screens: the panes fill the viewport below the header and each scrolls
+   on its own, so the page itself never does. */
+@media not all and (max-width: 54rem) {
+  body:has(.panes) { height: 100vh; display: flex; flex-direction: column; }
+  body:has(.panes) > main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .panes { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .panes > * { overflow-y: auto; }
+}
+
 @media (max-width: 54rem) {
   .board { grid-template-columns: 1fr; }
   .panes { display: block; }
