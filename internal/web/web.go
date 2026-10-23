@@ -354,6 +354,12 @@ func parseFilters(q url.Values) filters {
 	return f
 }
 
+// issueURL is the path to Issue n of the Project slug, followed by query (a
+// filters' query, or "").
+func issueURL(slug string, n int64, query string) string {
+	return "/" + slug + "/issues/" + strconv.FormatInt(n, 10) + query
+}
+
 // query encodes f; the default view is left out.
 func (f filters) query() string {
 	v := url.Values{}
@@ -691,10 +697,10 @@ func (s *server) listRow(ctx context.Context, slug string, i store.Issue, f filt
 		return row{}, err
 	}
 	rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked() || rel.OpenChildren > 0, OpenChildren: rel.OpenChildren,
-		URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected,
+		URL: issueURL(slug, i.Number, f.query()), Selected: i.Number == selected,
 		Holder: hs.view(i.HolderSession)}
 	if rel.Parent != nil {
-		rw.ParentURL = "/" + slug + "/issues/" + strconv.FormatInt(rel.Parent.Number, 10) + f.query()
+		rw.ParentURL = issueURL(slug, rel.Parent.Number, f.query())
 	}
 	for _, name := range byIssue[i.Number] {
 		rw.Labels = append(rw.Labels, colours[name])
@@ -767,7 +773,7 @@ func (s *server) issueView(ctx context.Context, slug string, n int64, f filters,
 	}
 	iv := issueView{Issue: i, Slug: slug, Blocked: rel.blocked() || rel.OpenChildren > 0, OpenChildren: rel.OpenChildren, Body: renderMarkdown(slug, i.Body), Query: f.query()}
 	link := func(r Ref) refLink {
-		return refLink{Ref: r, URL: "/" + slug + "/issues/" + strconv.FormatInt(r.Number, 10) + iv.Query}
+		return refLink{Ref: r, URL: issueURL(slug, r.Number, iv.Query)}
 	}
 	links := func(rs []Ref) []refLink {
 		var out []refLink

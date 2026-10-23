@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -145,14 +144,13 @@ func (s *server) sessionPage(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 	h := holders{byID: map[string]store.Session{id: sess}, now: s.now()}
-	issueURL := func(slug string, n int64) string { return "/" + slug + "/issues/" + strconv.FormatInt(n, 10) }
 	var hv []heldIssue
 	for _, i := range held {
-		hv = append(hv, heldIssue{SessionIssue: i, URL: issueURL(i.Slug, i.Number)})
+		hv = append(hv, heldIssue{SessionIssue: i, URL: issueURL(i.Slug, i.Number, "")})
 	}
 	var ev []sessionEventView
 	for _, e := range events {
-		ev = append(ev, sessionEventView{SessionEvent: e, URL: issueURL(e.Slug, e.Number)})
+		ev = append(ev, sessionEventView{SessionEvent: e, URL: issueURL(e.Slug, e.Number, "")})
 	}
 	s.render(w, r, http.StatusOK, "session", map[string]any{
 		"Title":   "Session " + shortID(id),

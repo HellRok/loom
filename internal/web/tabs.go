@@ -45,7 +45,7 @@ func tabURL(slug string, n int64, f filters, tab, def string) string {
 	if tab != def {
 		v.Set("tab", tab)
 	}
-	u := "/" + slug + "/issues/" + strconv.FormatInt(n, 10)
+	u := issueURL(slug, n, "")
 	if len(v) > 0 {
 		u += "?" + v.Encode()
 	}
@@ -106,7 +106,7 @@ func (s *server) loadTab(ctx context.Context, iv *issueView, requested string, f
 	}
 	iv.Self = tabURL(iv.Slug, iv.Number, f, iv.Tab, def)
 
-	link := func(n int64) string { return "/" + iv.Slug + "/issues/" + strconv.FormatInt(n, 10) + iv.Query }
+	link := func(n int64) string { return issueURL(iv.Slug, n, iv.Query) }
 	switch iv.Tab {
 	case tabBoard:
 		fr, err := s.Store.Frontier(ctx, iv.Slug, iv.Number)
@@ -297,7 +297,7 @@ func (s *server) history(ctx context.Context, iv *issueView, link func(int64) st
 // tabURLKeep is iv's URL on tab, with the filters it was opened with. The
 // Overview is every kind's tab, and a Map's default is the Board.
 func tabURLKeep(iv *issueView, tab string) string {
-	u := "/" + iv.Slug + "/issues/" + strconv.FormatInt(iv.Number, 10)
+	u := issueURL(iv.Slug, iv.Number, "")
 	v, _ := url.ParseQuery(strings.TrimPrefix(iv.Query, "?"))
 	if tab != tabsFor(iv.Kind)[0] {
 		v.Set("tab", tab)
