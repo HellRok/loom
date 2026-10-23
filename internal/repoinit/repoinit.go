@@ -189,7 +189,7 @@ const labelColumn = "label in our tracker"
 func parseTriageLabels(doc string) []string {
 	col := -1
 	var out []string
-	for _, l := range strings.Split(doc, "\n") {
+	for l := range strings.SplitSeq(doc, "\n") {
 		l = strings.TrimSpace(l)
 		if !strings.HasPrefix(l, "|") {
 			if col >= 0 { // a non-table line after the header

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Blocks the commit unless formatting, vet, go fix, unit tests and system
+# tests all pass. Enable with: git config core.hooksPath .githooks
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: gofmt"
+unformatted=$(gofmt -l $(git ls-files '*.go'))
+if [ -n "$unformatted" ]; then
+  echo "Not gofmt-formatted (run go fmt ./...):" >&2
+  echo "$unformatted" >&2
+  exit 1
+fi
+
+# Git sets these for hooks; left in place they break the git repos the tests
+# create themselves.
+unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX
+
+echo "pre-commit: go vet"
+go vet ./...
+
+echo "pre-commit: go fix"
+# go fix -diff exits 0 even when it has changes, so fail on any output.
+fixes=$(go fix -diff ./... 2>&1)
+if [ -n "$fixes" ]; then
+  echo "$fixes" >&2
+  echo "go fix has changes to apply (run go fix ./...)." >&2
+  exit 1
+fi
+
+echo "pre-commit: go test ./..."
+go test ./...
+
+echo "pre-commit: system tests"
+go test -tags system ./internal/systest/

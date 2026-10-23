@@ -2,6 +2,8 @@
 
 `go test ./...` runs the unit and handler tests. **System tests** boot a real Loom daemon and drive the web UI in headless Chrome (chromedp, using the locally installed Chrome); they live in `internal/systest` behind the `system` build tag. Run them with `go test -tags system ./internal/systest/`.
 
+A **pre-commit hook** in `.githooks/` runs gofmt, `go vet`, `go fix -diff`, `go test ./...` and the system tests, and blocks the commit if any fail. Enable it once per clone with `git config core.hooksPath .githooks`.
+
 ## Agent skills
 
 ### Issue tracker

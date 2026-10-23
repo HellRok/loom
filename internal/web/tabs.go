@@ -216,7 +216,7 @@ const gistLen = 200
 // gist is the first paragraph of Markdown body as one plain line.
 func gist(body string) string {
 	var lines []string
-	for _, l := range strings.Split(strings.TrimSpace(body), "\n") {
+	for l := range strings.SplitSeq(strings.TrimSpace(body), "\n") {
 		l = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "#> "))
 		if l == "" {
 			if len(lines) > 0 {
