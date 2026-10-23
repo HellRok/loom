@@ -174,7 +174,7 @@ func loadPages(s *server) map[string]*template.Template {
 	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	pages := map[string]*template.Template{}
 	for _, name := range []string{"home", "project", "notfound", "sessions", "session", "glossary"} {
-		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html", "templates/tabs.html"))
+		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html", "templates/tabs.html", "templates/nav.html"))
 	}
 	return pages
 }
@@ -594,75 +594,12 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 		return
 	}
 	f := parseFilters(r.URL.Query())
-
-	data := map[string]any{"Slug": slug, "Standalone": proj.Standalone, "Title": slug, "Q": f.Q, "View": f.View, "DefaultView": views[0].Key, "Labels": f.Labels, "Untagged": f.Untagged}
-
-	sums, err := s.Store.ProjectSummaries(ctx)
+	data, lists, err := s.projectData(ctx, slug, proj, f, selected)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var sw []switcherItem
-	for _, p := range sums {
-		sw = append(sw, switcherItem{Slug: p.Slug, Open: p.Open, Active: p.Slug == slug})
-	}
-	data["Switcher"] = sw
-
-	var vl []viewLink
-	for _, v := range views {
-		g := filters{View: v.Key, Q: f.Q}
-		_, n, err := s.Store.Issues(ctx, slug, withLimit(v.Filter, 1))
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		vl = append(vl, viewLink{Name: v.Name, URL: "/" + slug + g.query(), Count: n, Active: v.Key == f.View})
-	}
-	data["Views"] = vl
-
-	labels, err := s.Store.Labels(ctx, slug)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	colours := map[string]store.Label{}
-	for _, l := range labels {
-		colours[l.Name] = l
-	}
-
-	issues, _, err := s.Store.Issues(ctx, slug, f.issueFilter())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	byIssue, err := s.Store.LabelsByIssue(ctx, slug)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	hs, err := s.holders(ctx)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var rows []row
-	for _, i := range issues {
-		if !f.matchesQ(i) {
-			continue
-		}
-		rw, err := s.listRow(ctx, slug, i, f, selected, colours, byIssue, hs)
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		rows = append(rows, rw)
-	}
-	data["Rows"] = rows
-	if data["LabelLinks"], err = s.labelLinks(ctx, slug, f, labels, rows); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	data["Clear"] = "/" + slug
+	colours, byIssue, hs := lists.colours, lists.byIssue, lists.hs
 
 	if f.View == viewFrontier {
 		fv, err := s.frontierView(ctx, slug, f, selected, colours, byIssue, hs)
@@ -683,6 +620,80 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 		data["Title"] = fmt.Sprintf("#%d %s · %s", iv.Number, iv.Title, slug)
 	}
 	s.render(w, r, http.StatusOK, "project", data)
+}
+
+// projectLists are the lookups the list and Issue panes share.
+type projectLists struct {
+	colours map[string]store.Label
+	byIssue map[int64][]string
+	hs      holders
+}
+
+// projectData is the data of the navigation and list panes of Project slug
+// under filters f, with Issue selected marked in the list.
+func (s *server) projectData(ctx context.Context, slug string, proj store.Project, f filters, selected int64) (map[string]any, projectLists, error) {
+	data := map[string]any{"Slug": slug, "Standalone": proj.Standalone, "Title": slug, "Q": f.Q, "View": f.View, "DefaultView": views[0].Key, "Labels": f.Labels, "Untagged": f.Untagged}
+
+	sums, err := s.Store.ProjectSummaries(ctx)
+	if err != nil {
+		return nil, projectLists{}, err
+	}
+	var sw []switcherItem
+	for _, p := range sums {
+		sw = append(sw, switcherItem{Slug: p.Slug, Open: p.Open, Active: p.Slug == slug})
+	}
+	data["Switcher"] = sw
+
+	var vl []viewLink
+	for _, v := range views {
+		g := filters{View: v.Key, Q: f.Q}
+		_, n, err := s.Store.Issues(ctx, slug, withLimit(v.Filter, 1))
+		if err != nil {
+			return nil, projectLists{}, err
+		}
+		vl = append(vl, viewLink{Name: v.Name, URL: "/" + slug + g.query(), Count: n, Active: v.Key == f.View})
+	}
+	data["Views"] = vl
+
+	labels, err := s.Store.Labels(ctx, slug)
+	if err != nil {
+		return nil, projectLists{}, err
+	}
+	colours := map[string]store.Label{}
+	for _, l := range labels {
+		colours[l.Name] = l
+	}
+
+	issues, _, err := s.Store.Issues(ctx, slug, f.issueFilter())
+	if err != nil {
+		return nil, projectLists{}, err
+	}
+	byIssue, err := s.Store.LabelsByIssue(ctx, slug)
+	if err != nil {
+		return nil, projectLists{}, err
+	}
+	hs, err := s.holders(ctx)
+	if err != nil {
+		return nil, projectLists{}, err
+	}
+	var rows []row
+	for _, i := range issues {
+		if !f.matchesQ(i) {
+			continue
+		}
+		rw, err := s.listRow(ctx, slug, i, f, selected, colours, byIssue, hs)
+		if err != nil {
+			return nil, projectLists{}, err
+		}
+		rows = append(rows, rw)
+	}
+	data["Rows"] = rows
+	if data["LabelLinks"], err = s.labelLinks(ctx, slug, f, labels, rows); err != nil {
+		return nil, projectLists{}, err
+	}
+	data["Clear"] = "/" + slug
+
+	return data, projectLists{colours, byIssue, hs}, nil
 }
 
 func (f filters) matchesQ(i store.Issue) bool {

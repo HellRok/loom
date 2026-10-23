@@ -26,6 +26,8 @@ progress { width: 10rem; vertical-align: middle; }
 .panes { display: grid; grid-template-columns: 15rem minmax(18rem, 26rem) 1fr; min-height: calc(100vh - 3rem); }
 .panes > * { padding: 0.75rem 1rem; border-right: 1px solid var(--line); overflow-wrap: anywhere; }
 .panes > :last-child { border-right: 0; }
+.panes > .glossary { grid-column: 2 / -1; max-width: none; margin: 0; }
+.panes > .glossary > * { max-width: 52rem; }
 .nav { background: var(--panel); }
 .nav h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 1rem 0 0.25rem; }
 .nav h2:first-child { margin-top: 0; }

@@ -1,0 +1,18 @@
+{{define "nav"}}<nav class="nav" id="nav" aria-label="Project navigation" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+  <h2>Projects</h2>
+  <ul class="switcher">
+    {{range .Switcher}}<li{{if .Active}} class="active" aria-current="page"{{end}}><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a> <span class="count">{{.Open}}</span></li>{{end}}
+  </ul>
+  <h2>Views</h2>
+  <ul class="views">
+    {{range .Views}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}}</a> <span class="count">{{.Count}}</span></li>{{end}}
+  </ul>
+  {{if .Standalone}}<h2>Reference</h2>
+  <ul class="reference">
+    <li{{if .GlossaryActive}} class="active" aria-current="page"{{end}}><a href="/{{.Slug}}/glossary" hx-get="/{{.Slug}}/glossary" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">Glossary</a></li>
+  </ul>
+  {{end}}  <h2>Labels</h2>
+  <ul class="labels">
+    {{range .LabelLinks}}<li{{if or .Active .Zero}} class="{{if .Active}}active{{end}}{{if and .Active .Zero}} {{end}}{{if .Zero}}zero{{end}}"{{end}}{{if .Active}} aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="label label-{{.Colour}}">{{.Name}}</span></a> <span class="count">{{.Count}}</span></li>{{end}}
+  </ul>
+</nav>{{end}}

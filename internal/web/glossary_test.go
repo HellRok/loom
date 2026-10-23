@@ -183,3 +183,44 @@ func TestGlossaryPageFollowsTheStandaloneFlagWithoutARestart(t *testing.T) {
 	_, doc := f.get("/loom", "")
 	expect(t, doc, "#nav a[href='/loom/glossary']", 0)
 }
+
+func TestGlossaryPageKeepsTheNavigationBesideIt(t *testing.T) {
+	f := seed(t)
+	standalone(t, f, "loom")
+	if _, err := f.st.EditGlossary(context.Background(), "loom", 0, "# Loom"); err != nil {
+		t.Fatal(err)
+	}
+
+	_, doc := f.get("/loom/glossary", "")
+	// The Glossary takes the place of the list and Issue panes.
+	expect(t, doc, ".panes > #nav", 1)
+	expect(t, doc, ".panes > #glossary-pane", 1)
+	expect(t, doc, "#list-pane, #issue-pane", 0)
+	_, project := f.get("/loom", "")
+	if got, want := doc.Find("#nav .views li").Length(), project.Find("#nav .views li").Length(); got == 0 || got != want {
+		t.Errorf("Views = %d, want the Project page's %d", got, want)
+	}
+	if got, want := doc.Find("#nav .labels").Text(), project.Find("#nav .labels").Text(); got == "" || got != want {
+		t.Errorf("Labels = %q, want the Project page's %q", got, want)
+	}
+
+	// The Glossary is the current page, not a View.
+	expect(t, doc, "#nav .views li.active", 0)
+	expect(t, doc, "#nav .reference li.active a[href='/loom/glossary']", 1)
+	expect(t, doc, "#nav .switcher li.active", 1)
+
+	// The navigation refreshes from the Glossary page's address.
+	rec, frag := f.get("/loom/glossary", "nav")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("nav fragment status %d", rec.Code)
+	}
+	expect(t, frag, "nav#nav", 1)
+	expect(t, frag, "#glossary-pane", 0)
+	expect(t, frag, "#nav .reference li.active", 1)
+	expect(t, frag, "#nav .views li.active", 0)
+
+	// A Project page marks a View, not the Glossary.
+	_, doc = f.get("/loom", "")
+	expect(t, doc, "#nav .views li.active", 1)
+	expect(t, doc, "#nav .reference li.active", 0)
+}
