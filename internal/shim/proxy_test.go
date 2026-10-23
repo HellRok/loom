@@ -24,8 +24,9 @@ import (
 // daemonStub is a Loom-shaped daemon: /healthz plus a stateless /mcp whose
 // `echo` tool returns the Loom headers it saw. `drop` hangs up mid-call.
 type daemonStub struct {
-	srv  *httptest.Server
-	home string
+	srv    *httptest.Server
+	server *mcp.Server
+	home   string
 
 	mu   sync.Mutex
 	seen []http.Header
@@ -35,6 +36,7 @@ func newDaemonStub(t *testing.T, home, version string) *daemonStub {
 	t.Helper()
 	d := &daemonStub{home: home}
 	server := mcp.NewServer(&mcp.Implementation{Name: "loom"}, nil)
+	d.server = server
 	mcp.AddTool(server, &mcp.Tool{Name: "echo"}, func(ctx context.Context, req *mcp.CallToolRequest, in struct {
 		Say string `json:"say"`
 	}) (*mcp.CallToolResult, map[string]string, error) {
@@ -79,6 +81,13 @@ func peekBody(r *http.Request) string {
 // it. spawn stands in for starting a daemon process.
 func connect(t *testing.T, target shim.Target, spawn func(context.Context) (<-chan error, error)) *mcp.ClientSession {
 	t.Helper()
+	return connectWith(t, target, spawn, nil)
+}
+
+// connectWith is connect with options for the agent's session, such as the
+// protocol version it speaks.
+func connectWith(t *testing.T, target shim.Target, spawn func(context.Context) (<-chan error, error), opts *mcp.ClientSessionOptions) *mcp.ClientSession {
+	t.Helper()
 	s, err := shim.NewWithSpawn(target, spawn)
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +97,7 @@ func connect(t *testing.T, target shim.Target, spawn func(context.Context) (<-ch
 	if _, err := s.Server().Connect(ctx, st, nil); err != nil {
 		t.Fatal(err)
 	}
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "agent"}, nil).Connect(ctx, ct, nil)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "agent"}, nil).Connect(ctx, ct, opts)
 	if err != nil {
 		t.Fatal(err)
 	}

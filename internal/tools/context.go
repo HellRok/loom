@@ -116,21 +116,30 @@ func (h *handlers) resolveProject(ctx context.Context, c call) (store.Project, e
 	if c.Cwd == "" {
 		return store.Project{}, h.projectError(ctx, codeNoProject, "No working directory was sent (X-Loom-Cwd), so pass `project` with a Slug.")
 	}
-	loc, _ := c.location(ctx)
-	ps, err := h.store.Projects(ctx)
+	best, loc, err := h.projectAt(ctx, c)
 	if err != nil {
 		return store.Project{}, err
-	}
-	var best store.Project
-	for _, p := range ps {
-		if within(loc, p.Root) && len(p.Root) > len(best.Root) {
-			best = p
-		}
 	}
 	if best.Slug == "" {
 		return best, h.projectError(ctx, codeNoProject, fmt.Sprintf("No Project's Root contains %s. Pass `project` with a Slug, or call create_project here.", loc))
 	}
 	return best, nil
+}
+
+// projectAt finds the Project with the longest Root containing the caller's
+// location, which it also returns. The Project is zero if none does.
+func (h *handlers) projectAt(ctx context.Context, c call) (best store.Project, loc string, err error) {
+	loc, _ = c.location(ctx)
+	ps, err := h.store.Projects(ctx)
+	if err != nil {
+		return store.Project{}, loc, err
+	}
+	for _, p := range ps {
+		if within(loc, p.Root) && len(p.Root) > len(best.Root) {
+			best = p
+		}
+	}
+	return best, loc, nil
 }
 
 func within(path, root string) bool {

@@ -120,6 +120,10 @@ type listProjectsIn struct {
 
 type listProjectsOut struct {
 	Projects []projectOut `json:"projects"`
+	// Current is the Project covering the caller's working directory, as
+	// every other tool would resolve it; absent if none does. `loom mcp`
+	// reads it to write the agent's instructions.
+	Current *projectOut `json:"current,omitempty"`
 }
 
 func (h *handlers) listProjects(ctx context.Context, c call, in listProjectsIn) (listProjectsOut, error) {
@@ -127,7 +131,18 @@ func (h *handlers) listProjects(ctx context.Context, c call, in listProjectsIn) 
 	if err != nil {
 		return listProjectsOut{}, err
 	}
-	return listProjectsOut{Projects: toProjectOuts(ps)}, nil
+	out := listProjectsOut{Projects: toProjectOuts(ps)}
+	if c.Cwd != "" {
+		here, _, err := h.projectAt(ctx, c)
+		if err != nil {
+			return listProjectsOut{}, err
+		}
+		if here.Slug != "" {
+			cur := toProjectOut(here)
+			out.Current = &cur
+		}
+	}
+	return out, nil
 }
 
 type moveProjectIn struct {

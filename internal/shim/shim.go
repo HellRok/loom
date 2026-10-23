@@ -10,10 +10,25 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/HellRok/loom/internal/repoinit"
 )
 
 // startTimeout caps how long a spawned daemon has to answer /healthz.
 const startTimeout = 8 * time.Second
+
+// instructionsTimeout caps how long the agent's handshake waits to learn
+// which Project covers its cwd. It is shorter than startTimeout, so a
+// handshake that has to start the daemon answers with the static
+// instructions while the daemon carries on starting.
+var instructionsTimeout = 2 * time.Second
+
+// The MCP methods that open a session: the legacy handshake and the
+// stateless one that replaces it. Both reply with the server's instructions.
+const (
+	methodInitialize = "initialize"
+	methodDiscover   = "server/discover"
+)
 
 // The codes of the tool errors the shim itself returns, in the daemon's
 // {error: {code, message, ...}} shape.
@@ -57,6 +72,19 @@ func (s *Shim) Server() *mcp.Server {
 	})
 	srv.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method == methodInitialize || method == methodDiscover {
+				res, err := next(ctx, method, req)
+				if err != nil {
+					return res, err
+				}
+				switch r := res.(type) {
+				case *mcp.InitializeResult:
+					r.Instructions = s.instructions(ctx)
+				case *mcp.DiscoverResult:
+					r.Instructions = s.instructions(ctx)
+				}
+				return res, nil
+			}
 			switch r := req.(type) {
 			case *mcp.ListToolsRequest:
 				return s.listTools(ctx, r.Params)
@@ -67,6 +95,51 @@ func (s *Shim) Server() *mcp.Server {
 		}
 	})
 	return srv
+}
+
+// instructions is what the agent is told on initialize, which depends on
+// where it is working: nothing when no Project covers its cwd, the Project's
+// guidance when one does, and the static fallback when the daemon can't say
+// within instructionsTimeout.
+func (s *Shim) instructions(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, instructionsTimeout)
+	defer cancel()
+	slug, err := s.currentProject(ctx)
+	switch {
+	case err != nil:
+		return repoinit.StaticInstructions
+	case slug == "":
+		return ""
+	}
+	return repoinit.Instructions(slug)
+}
+
+// currentProject asks the daemon for the Slug of the Project covering the
+// shim's cwd, empty if none does.
+func (s *Shim) currentProject(ctx context.Context) (string, error) {
+	res, err := s.Call(ctx, "list_projects", nil)
+	if err != nil {
+		return "", err
+	}
+	if res.IsError {
+		return "", fmt.Errorf("list_projects failed: %v", res.Content)
+	}
+	b, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Current *struct {
+			Slug string `json:"slug"`
+		} `json:"current"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return "", err
+	}
+	if out.Current == nil {
+		return "", nil
+	}
+	return out.Current.Slug, nil
 }
 
 // Call makes one tool call for a CLI command, starting the daemon if needed.

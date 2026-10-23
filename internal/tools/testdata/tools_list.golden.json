@@ -1174,6 +1174,31 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "current": {
+          "additionalProperties": false,
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "root_missing": {
+              "type": "boolean"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "standalone": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "slug",
+            "root"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "projects": {
           "items": {
             "additionalProperties": false,

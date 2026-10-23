@@ -156,3 +156,36 @@ func TestDeleteProject(t *testing.T) {
 	// The Slug and Root are free again.
 	h.mustOK(h.call(dir, "create_project", map[string]any{"slug": "doomed"}))
 }
+
+func TestListProjectsNamesTheProjectCoveringTheCallersCwd(t *testing.T) {
+	h := newHarness(t)
+	outer := gitRepo(t, t.TempDir(), "outer")
+	inner := gitRepo(t, mkdir(t, outer, "pkg"), "inner")
+	other := mkdir(t, t.TempDir(), "other")
+	h.mustOK(h.call(outer, "create_project", map[string]any{"slug": "outer"}))
+	h.mustOK(h.call(inner, "create_project", map[string]any{"slug": "inner"}))
+	h.mustOK(h.call(other, "create_project", map[string]any{"slug": "other"}))
+
+	current := func(cwd string) any {
+		out := h.mustOK(h.call(cwd, "list_projects", nil))
+		if c, ok := out["current"].(map[string]any); ok {
+			return c["slug"]
+		}
+		return nil
+	}
+	if got := current(outer); got != "outer" {
+		t.Errorf("at the Root: got %v, want outer", got)
+	}
+	if got := current(mkdir(t, outer, "cmd")); got != "outer" {
+		t.Errorf("below the Root: got %v, want outer", got)
+	}
+	if got := current(inner); got != "inner" {
+		t.Errorf("nested Roots: got %v, want the deepest, inner", got)
+	}
+	if got := current(mkdir(t, t.TempDir(), "elsewhere")); got != nil {
+		t.Errorf("outside every Root: got %v, want none", got)
+	}
+	if got := current(""); got != nil {
+		t.Errorf("no cwd sent: got %v, want none", got)
+	}
+}
