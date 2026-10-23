@@ -572,6 +572,48 @@
     }
   },
   {
+    "description": "Replace the Project's whole Glossary. Pass the version you read from view_glossary (0 if none exists yet): if the Glossary changed since, the edit is refused with the current text instead of overwriting it.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The whole new Markdown Glossary, replacing the old one",
+          "type": "string"
+        },
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version you last read; the edit is refused if the Glossary has changed since",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "edit_glossary",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Replace an Issue's title and/or body. Pass the version you read: if the Issue changed since, the edit is refused with the current text instead of overwriting it.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1504,6 +1546,40 @@
         "slug",
         "root",
         "already"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "The Project's Glossary: one Markdown document of its domain language, with its version. Empty body and version 0 until one is written.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "description": "The Slug of the Project to act on; defaults to the Project containing your working directory",
+          "type": "string"
+        },
+        "session": {
+          "description": "Your Session id, for direct-HTTP clients; the X-Loom-Session header wins",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "view_glossary",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "body",
+        "version"
       ],
       "type": "object"
     }

@@ -149,6 +149,14 @@ func NewServer(d Deps) *mcp.Server {
 		Description: "Free a claimed Issue, whichever Session holds it (the Event records who released). Releasing an unclaimed Issue changes nothing and returns already: true.",
 	}, h.release)
 	add(s, h, &mcp.Tool{
+		Name:        "view_glossary",
+		Description: "The Project's Glossary: one Markdown document of its domain language, with its version. Empty body and version 0 until one is written.",
+	}, h.viewGlossary)
+	add(s, h, &mcp.Tool{
+		Name:        "edit_glossary",
+		Description: "Replace the Project's whole Glossary. Pass the version you read from view_glossary (0 if none exists yet): if the Glossary changed since, the edit is refused with the current text instead of overwriting it.",
+	}, h.editGlossary)
+	add(s, h, &mcp.Tool{
 		Name:        "list_sessions",
 		Description: "Every agent Session Loom has recorded, with when it was first and last seen. Calls from `loom` subcommands aren't recorded.",
 	}, h.listSessions)

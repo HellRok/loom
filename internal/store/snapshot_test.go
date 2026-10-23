@@ -60,6 +60,8 @@ func seed(t *testing.T, st *store.Store) {
 	must(err)
 	_, err = st.AddComment(ctx, "demo", 2, "a comment", bob)
 	must(err)
+	_, err = st.EditGlossary(ctx, "demo", 0, "# Demo\n\n**Widget**: a thing.")
+	must(err)
 	edited := "First ticket, edited"
 	_, err = st.EditIssue(ctx, "demo", 2, 1, &edited, nil, ann)
 	must(err)
