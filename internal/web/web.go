@@ -461,12 +461,6 @@ func labelLinks(slug string, f filters, labels []store.Label, rows []row) []labe
 	return ll
 }
 
-// countPart is one piece of the Frontier's count line.
-type countPart struct {
-	Text string
-	URL  string
-}
-
 // notReady is an open ready-for-agent Issue that is not on the Frontier, and
 // why.
 type notReady struct {
@@ -476,7 +470,6 @@ type notReady struct {
 
 // frontierView is what the Frontier view shows beyond its rows.
 type frontierView struct {
-	Counts   []countPart
 	NotReady []notReady
 }
 
@@ -723,37 +716,10 @@ func (s *server) listRow(ctx context.Context, slug string, i store.Issue, f filt
 	return rw, nil
 }
 
-// frontierView counts the Frontier by readiness label and lists the open
-// ready-for-agent Issues that are tagged ready but are blocked or claimed.
+// frontierView lists the open ready-for-agent Issues that are tagged ready but
+// are blocked or claimed.
 func (s *server) frontierView(ctx context.Context, slug string, f filters, selected int64, colours map[string]store.Label, byIssue map[int64][]string, hs holders) (frontierView, error) {
-	count := func(mod func(*store.IssueFilter)) (int, error) {
-		sf := withLimit(frontierFilter, 1)
-		mod(&sf)
-		_, n, err := s.Store.Issues(ctx, slug, sf)
-		return n, err
-	}
-	base := filters{View: viewFrontier, Q: f.Q}
 	var fv frontierView
-	ready, err := count(func(*store.IssueFilter) {})
-	if err != nil {
-		return fv, err
-	}
-	fv.Counts = append(fv.Counts, countPart{Text: strconv.Itoa(ready) + " ready", URL: "/" + slug + base.query()})
-	for _, l := range readyLabels {
-		n, err := count(func(sf *store.IssueFilter) { sf.Labels = []string{l} })
-		if err != nil {
-			return fv, err
-		}
-		fv.Counts = append(fv.Counts, countPart{Text: strconv.Itoa(n) + " " + l, URL: "/" + slug + base.withLabel(l).query()})
-	}
-	n, err := count(func(sf *store.IssueFilter) { sf.NotLabels = readyLabels })
-	if err != nil {
-		return fv, err
-	}
-	untagged := base
-	untagged.Untagged = true
-	fv.Counts = append(fv.Counts, countPart{Text: strconv.Itoa(n) + " untagged", URL: "/" + slug + untagged.query()})
-
 	tagged := f.issueFilter()
 	tagged.Blocked, tagged.Claimed, tagged.NoOpenChildren = nil, nil, false
 	tagged.Labels = append([]string{readyForAgent}, withoutLabel(tagged.Labels, readyForAgent)...)

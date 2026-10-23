@@ -13,7 +13,6 @@
     <button type="submit">Filter</button>
     {{if or .Q .Labels .Untagged}}<a class="clear" href="{{.Clear}}" hx-get="{{.Clear}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">clear</a>{{end}}
   </form>
-  {{with .Frontier}}<p class="frontier-counts">{{range $i, $p := .Counts}}{{if $i}} · {{end}}<a href="{{$p.URL}}" hx-get="{{$p.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{$p.Text}}</a>{{end}}</p>{{end}}
   <p class="active-filters">{{len .Rows}} shown{{if .Labels}} · labels: {{range .Labels}}<span class="chip">{{.}}</span>{{end}}{{end}}{{if .Untagged}} · <span class="chip">untagged</span>{{end}}{{if .Q}} · matching <span class="chip">{{.Q}}</span>{{end}}</p>
   <ul class="rows">
     {{range .Rows}}

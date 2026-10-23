@@ -527,23 +527,15 @@ func seedFrontier(t *testing.T) *fixture {
 func TestFrontierView(t *testing.T) {
 	f := seedFrontier(t)
 
-	t.Run("count line splits by label", func(t *testing.T) {
+	t.Run("lists the ready rows without a count line", func(t *testing.T) {
 		_, doc := f.get("/loom?view=frontier", "")
 		if got := rowNumbers(doc); got != "#3 #5 #6" {
 			t.Errorf("frontier lists %q", got)
 		}
-		if got := text(doc, ".frontier-counts"); got != "3 ready · 1 ready-for-agent · 1 ready-for-human · 1 untagged" {
-			t.Errorf("count line = %q", got)
-		}
-		var hrefs []string
-		doc.Find(".frontier-counts a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
-		want := "/loom?view=frontier /loom?label=ready-for-agent&view=frontier /loom?label=ready-for-human&view=frontier /loom?untagged=1&view=frontier"
-		if got := strings.Join(hrefs, " "); got != want {
-			t.Errorf("count line links = %s, want %s", got, want)
-		}
+		expect(t, doc, ".frontier-counts", 0)
 	})
 
-	t.Run("click-throughs filter the list", func(t *testing.T) {
+	t.Run("label and untagged URL filters narrow the list", func(t *testing.T) {
 		for _, c := range []struct{ query, rows string }{
 			{"view=frontier&label=ready-for-agent", "#3"},
 			{"view=frontier&label=ready-for-human", "#5"},
@@ -556,9 +548,8 @@ func TestFrontierView(t *testing.T) {
 		}
 	})
 
-	t.Run("count line only on the Frontier", func(t *testing.T) {
+	t.Run("not-ready group only on the Frontier", func(t *testing.T) {
 		_, doc := f.get("/loom?view=open", "")
-		expect(t, doc, ".frontier-counts", 0)
 		expect(t, doc, ".not-ready", 0)
 	})
 
@@ -578,7 +569,6 @@ func TestFrontierView(t *testing.T) {
 	t.Run("group is hidden when empty", func(t *testing.T) {
 		_, doc := seed(t).get("/loom?view=frontier", "")
 		expect(t, doc, ".not-ready", 0)
-		expect(t, doc, ".frontier-counts", 1)
 	})
 }
 
@@ -727,9 +717,6 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 		expect(t, doc, ".not-ready li", 1)
 		if got := text(doc, ".not-ready #row-1 .reason"); got != "waiting on 1 open child" {
 			t.Errorf("#1 reason = %q", got)
-		}
-		if got := text(doc, ".frontier-counts"); got != "3 ready · 0 ready-for-agent · 0 ready-for-human · 3 untagged" {
-			t.Errorf("count line = %q", got)
 		}
 	})
 

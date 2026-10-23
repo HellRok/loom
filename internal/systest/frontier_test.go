@@ -41,12 +41,10 @@ func TestFrontierUpdatesLive(t *testing.T) {
 	l.Call("close", map[string]any{"ref": "#1"})
 	frontierIs(t, l, "#2")
 
-	// Tagging it updates the count line.
+	// Tagging it reaches the sidebar's Label count.
 	l.Call("label", map[string]any{"ref": "#2", "add": []string{"ready-for-agent"}})
-	counts := `document.querySelector("#list-pane .frontier-counts").textContent`
-	want := "1 ready · 1 ready-for-agent · 0 ready-for-human · 0 untagged"
-	got := Get(l, chromedp.Poll[string](fmt.Sprintf(`%s === %q && "ok"`, counts, want), chromedp.WithPollingTimeout(5*time.Second)))
+	got := Get(l, chromedp.Poll[string](labelCount("ready-for-agent")+` === "1" && "ok"`, chromedp.WithPollingTimeout(5*time.Second)))
 	if got != "ok" {
-		t.Fatalf("count line never read %q", want)
+		t.Fatal("the ready-for-agent count never read 1")
 	}
 }

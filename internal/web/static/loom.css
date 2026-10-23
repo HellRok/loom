@@ -130,7 +130,6 @@ progress { width: 10rem; vertical-align: middle; }
 .glossary .body table { border-collapse: collapse; }
 .glossary .body th, .glossary .body td { border: 1px solid var(--line); padding: 0.2rem 0.5rem; }
 
-.frontier-counts { margin: 0.4rem 0 0; font-size: 0.9em; }
 .not-ready-heading { font-size: 0.85rem; color: var(--muted); margin: 1rem 0 0.25rem; }
 .not-ready { list-style: none; margin: 0; padding: 0; opacity: 0.65; }
 .not-ready .row a { display: block; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); color: var(--fg); }
