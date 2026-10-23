@@ -29,11 +29,8 @@
   <ul class="not-ready">
     {{range .NotReady}}
     <li class="row status-{{.Status}}{{if .Selected}} selected{{end}}" id="row-{{.Number}}">
-      <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true">
-        <span class="num">#{{.Number}}</span>
-        <span class="title">{{.Title}}</span>
-        <span class="reason">{{if .Blockers}}blocked by {{range $i, $b := .Blockers}}{{if $i}}, {{end}}#{{$b}}{{end}}{{else if .Waiting}}{{.Waiting}}{{else if .Holder}}held by {{.Holder.Short}}{{else}}claimed{{end}}</span>
-      </a>
+      <div class="row-title"><a class="row-link" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true"><span class="num">#{{.Number}}</span> <span class="title">{{.Title}}</span></a></div>
+      <div class="reason">{{if .Blockers}}blocked by {{range $i, $b := .Blockers}}{{if $i}}, {{end}}#{{$b}}{{end}}{{else if .Waiting}}{{.Waiting}}{{else if .Holder}}held by {{.Holder.Short}}{{else}}claimed{{end}}</div>
     </li>
     {{end}}
   </ul>{{end}}{{end}}

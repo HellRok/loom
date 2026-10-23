@@ -563,6 +563,16 @@ func TestFrontierView(t *testing.T) {
 		}
 		// The ready rows stay apart from the muted group.
 		expect(t, doc, ".rows .row", 3)
+		// Its rows are laid out like the list's: a title line, then the reason.
+		expect(t, doc, ".not-ready #row-7 > .row-title > a.row-link", 1)
+		expect(t, doc, ".not-ready #row-7.selected", 0)
+	})
+
+	t.Run("the selected not-ready row carries the highlight on its row", func(t *testing.T) {
+		_, doc := f.get("/loom/issues/7?view=frontier", "")
+		expect(t, doc, "#list-pane .not-ready #row-7.selected", 1)
+		expect(t, doc, "#list-pane .not-ready #row-8.selected", 0)
+		expect(t, doc, "#list-pane .selected", 1)
 	})
 
 	t.Run("group is hidden when empty", func(t *testing.T) {
