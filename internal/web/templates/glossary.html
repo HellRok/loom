@@ -1,0 +1,5 @@
+{{define "main"}}<section class="glossary" id="glossary-pane">
+<p class="muted"><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a></p>
+<h1>Glossary</h1>
+{{if .Empty}}<p class="empty">No Glossary yet.</p>{{else}}<div class="body">{{.Body}}</div>{{end}}
+</section>{{end}}

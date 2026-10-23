@@ -80,10 +80,10 @@ type server struct {
 	broker *broker
 }
 
-// Register adds the UI's routes to mux: /, /static/, /events, /sessions, /<slug>,
-// /<slug>/events and /<slug>/issues/<n>. It claims every path no more
-// specific pattern takes, so a Project can't have the Slug "static" or
-// "events" or "sessions".
+// Register adds the UI's routes to mux: /, /static/, /events, /sessions,
+// /<slug>, /<slug>/events, /<slug>/glossary and /<slug>/issues/<n>. It claims
+// every path no more specific pattern takes, so a Project can't have the Slug
+// "static" or "events" or "sessions".
 //
 // It also takes over the Store's one OnChange hook to publish every write to the SSE
 // streams, so register once per Store. The returned function ends the open
@@ -128,6 +128,8 @@ func Register(mux *http.ServeMux, d Deps) (closeStreams func()) {
 			s.sessionsRoute(w, r)
 		case len(parts) == 1:
 			s.projectPage(w, r, parts[0], 0)
+		case len(parts) == 2 && parts[1] == "glossary":
+			s.glossaryPage(w, r, parts[0])
 		case len(parts) == 3 && parts[1] == "issues":
 			n, err := strconv.ParseInt(parts[2], 10, 64)
 			if err != nil || n < 1 || strconv.FormatInt(n, 10) != parts[2] {
@@ -160,7 +162,7 @@ func loadPages(s *server) map[string]*template.Template {
 	}
 	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"home", "project", "notfound", "sessions", "session"} {
+	for _, name := range []string{"home", "project", "notfound", "sessions", "session", "glossary"} {
 		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html", "templates/tabs.html"))
 	}
 	return pages
