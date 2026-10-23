@@ -292,13 +292,12 @@ func TestMapRulesForTickets(t *testing.T) {
 	dir := h.project("app")
 	m := h.issue(dir, map[string]any{"title": "Map", "kind": "map"})
 
-	// A Ticket needs exactly one wayfinder type and no triage labels.
+	// A Ticket needs exactly one wayfinder type; any other label is fine.
 	validTypes(t, h.call(dir, "create_issue", map[string]any{"title": "t", "parent": m}))
 	validTypes(t, h.call(dir, "create_issue", map[string]any{"title": "t", "parent": m, "labels": []string{"bug"}}))
 	validTypes(t, h.call(dir, "create_issue", map[string]any{"title": "t", "parent": m, "labels": []string{"wayfinder:task", "wayfinder:research"}}))
-	validTypes(t, h.call(dir, "create_issue", map[string]any{"title": "t", "parent": m, "labels": []string{"wayfinder:task", "needs-triage"}}))
 	// None of those took a number.
-	ticket := h.issue(dir, map[string]any{"title": "Ticket", "parent": m, "labels": []string{"wayfinder:grilling"}})
+	ticket := h.issue(dir, map[string]any{"title": "Ticket", "parent": m, "labels": []string{"wayfinder:grilling", "needs-triage"}})
 	if ticket != "#2" {
 		t.Fatalf("ticket = %s, want #2", ticket)
 	}
@@ -320,11 +319,11 @@ func TestMapRulesForTickets(t *testing.T) {
 	h.mustOK(h.call(dir, "set_parent", map[string]any{"ref": loose, "parent": m}))
 
 	// Labelling a Ticket keeps it well formed, as one step.
-	validTypes(t, h.call(dir, "label", map[string]any{"ref": ticket, "add": []string{"ready-for-agent"}}))
+	h.mustOK(h.call(dir, "label", map[string]any{"ref": ticket, "add": []string{"ready-for-agent", "bug"}, "remove": []string{"needs-triage"}}))
 	validTypes(t, h.call(dir, "label", map[string]any{"ref": ticket, "remove": []string{"wayfinder:grilling"}}))
 	validTypes(t, h.call(dir, "label", map[string]any{"ref": ticket, "add": []string{"wayfinder:task"}}))
 	h.mustOK(h.call(dir, "label", map[string]any{"ref": ticket, "add": []string{"wayfinder:task"}, "remove": []string{"wayfinder:grilling"}}))
-	if v := h.mustOK(h.call(dir, "view_issue", map[string]any{"ref": ticket})); !reflect.DeepEqual(strs(v["labels"]), []string{"wayfinder:task"}) {
+	if v := h.mustOK(h.call(dir, "view_issue", map[string]any{"ref": ticket})); !reflect.DeepEqual(strs(v["labels"]), []string{"bug", "ready-for-agent", "wayfinder:task"}) {
 		t.Fatalf("labels = %v", v["labels"])
 	}
 }
@@ -338,19 +337,17 @@ func TestSpecChildrenArePlainIssues(t *testing.T) {
 	h.mustOK(h.call(dir, "close", map[string]any{"ref": slice, "wontfix": true}))
 }
 
-func TestCloseWontfixIsRejectedOnTicketsAndChangesNothing(t *testing.T) {
+func TestTicketCanBeClosedAsWontfix(t *testing.T) {
 	h := newHarness(t)
 	dir := h.project("app")
 	m := h.issue(dir, map[string]any{"title": "Map", "kind": "map"})
 	ticket := h.issue(dir, map[string]any{"title": "T", "parent": m, "labels": []string{"wayfinder:task"}})
 
-	validTypes(t, h.call(dir, "close", map[string]any{"ref": ticket, "comment": "no", "wontfix": true}))
+	h.mustOK(h.call(dir, "close", map[string]any{"ref": ticket, "comment": "no", "wontfix": true}))
 	v := h.mustOK(h.call(dir, "view_issue", map[string]any{"ref": ticket}))
-	if v["state"] != "open" || len(v["comments"].([]any)) != 0 || !reflect.DeepEqual(strs(v["labels"]), []string{"wayfinder:task"}) {
-		t.Fatalf("a rejected close changed the Ticket: %v", v)
+	if v["state"] != "closed" || !reflect.DeepEqual(strs(v["labels"]), []string{"wayfinder:task", "wontfix"}) {
+		t.Fatalf("a won't-fix close left the Ticket as %v", v)
 	}
-	// Out-of-scope Tickets are simply closed.
-	h.mustOK(h.call(dir, "close", map[string]any{"ref": ticket, "comment": "out of scope"}))
 }
 
 func TestCreateIssueIsAtomicAcrossParentLabelsAndBlockers(t *testing.T) {

@@ -23,9 +23,6 @@ var WayfinderTypes = []string{"research", "prototype", "grilling", "task"}
 // wayfinderPrefix starts the name of a Ticket's type label.
 const wayfinderPrefix = "wayfinder:"
 
-// triageLabels are the Labels Tickets can't carry.
-var triageLabels = []string{"needs-triage", "needs-info", "ready-for-agent", "ready-for-human", LabelWontfix}
-
 // InvalidTicketError reports a change that breaks the Map rules.
 type InvalidTicketError struct {
 	Message string
@@ -167,8 +164,8 @@ func addBlockers(ctx context.Context, tx *sql.Tx, slug string, id, n int64, bloc
 
 // checkTicketRules fails with an *InvalidTicketError if Issue id, as it now
 // stands, breaks the Map rules: a Map has no parent, and a Ticket (a child
-// of a Map) has exactly one wayfinder type label, no triage label and no
-// children.
+// of a Map) has exactly one wayfinder type label and no children. Its other
+// Labels are unrestricted.
 func checkTicketRules(ctx context.Context, q querier, id int64) error {
 	var n int64
 	var kind string
@@ -214,7 +211,7 @@ func checkTicketRules(ctx context.Context, q querier, id int64) error {
 		return err
 	}
 	defer rows.Close()
-	var types, triage []string
+	var types []string
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
@@ -222,8 +219,6 @@ func checkTicketRules(ctx context.Context, q querier, id int64) error {
 		}
 		if t, ok := strings.CutPrefix(name, wayfinderPrefix); ok && slices.Contains(WayfinderTypes, t) {
 			types = append(types, name)
-		} else if slices.Contains(triageLabels, name) {
-			triage = append(triage, name)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -231,9 +226,6 @@ func checkTicketRules(ctx context.Context, q querier, id int64) error {
 	}
 	if len(types) != 1 {
 		return &InvalidTicketError{Message: fmt.Sprintf("#%d is a Ticket (a child of Map #%d), so it needs exactly one wayfinder:<type> label; it has %d.", n, pn, len(types))}
-	}
-	if len(triage) > 0 {
-		return &InvalidTicketError{Message: fmt.Sprintf("#%d is a Ticket (a child of Map #%d), and Tickets can't carry triage labels: %s.", n, pn, strings.Join(triage, ", "))}
 	}
 	return nil
 }

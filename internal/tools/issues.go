@@ -110,7 +110,7 @@ type createIssueIn struct {
 	Kind  string `json:"kind,omitempty" jsonschema:"issue (the default) or map; fixed once created"`
 	// Labels must all be defined in the Project.
 	Labels    []string `json:"labels,omitempty" jsonschema:"Labels to apply, all defined in the Project (see list_labels)"`
-	Parent    string   `json:"parent,omitempty" jsonschema:"The parent Issue's ref, in the same Project. A Map's children are Tickets: each needs exactly one wayfinder:<type> label and no triage labels, so pass labels too"`
+	Parent    string   `json:"parent,omitempty" jsonschema:"The parent Issue's ref, in the same Project. A Map's children are Tickets: each needs exactly one wayfinder:<type> label, so pass labels too; other labels are allowed alongside it"`
 	BlockedBy []string `json:"blocked_by,omitempty" jsonschema:"Refs of Issues that must close before this one can be taken, in the same Project"`
 }
 

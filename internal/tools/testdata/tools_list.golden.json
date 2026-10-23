@@ -302,7 +302,7 @@
           ]
         },
         "parent": {
-          "description": "The parent Issue's ref, in the same Project. A Map's children are Tickets: each needs exactly one wayfinder:\u003ctype\u003e label and no triage labels, so pass labels too",
+          "description": "The parent Issue's ref, in the same Project. A Map's children are Tickets: each needs exactly one wayfinder:\u003ctype\u003e label, so pass labels too; other labels are allowed alongside it",
           "type": "string"
         },
         "project": {
