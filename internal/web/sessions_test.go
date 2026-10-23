@@ -40,7 +40,7 @@ func TestClaimsShowHolderSession(t *testing.T) {
 	f := seedSessions(t)
 
 	t.Run("list row", func(t *testing.T) {
-		_, doc := f.get("/loom", "")
+		_, doc := f.get("/loom?view=open", "")
 		row := doc.Find("#row-3")
 		link := row.Find(".held-by a.session-link")
 		if link.Length() != 1 || link.Text() != "11112222" {
