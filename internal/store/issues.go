@@ -106,13 +106,20 @@ const (
 type IssueFilter struct {
 	State string
 	Kind  string
+	// NotKind excludes Issues of that kind.
+	NotKind string
 	// Assignee is AssigneeNone, AssigneeAny or a name.
 	Assignee string
 	// HeldBy selects the Issues claimed by that Session.
 	HeldBy string
+	// Claimed selects Issues somebody holds (true) or nobody does (false), as
+	// Issue.Claimed reports.
+	Claimed *bool
 	// Labels are all required; NoLabels selects Issues with none.
 	Labels   []string
 	NoLabels bool
+	// NotLabels excludes Issues carrying any of them.
+	NotLabels []string
 	// Parent selects the children of that Issue number, when above zero.
 	Parent int64
 	// Blocked selects Issues with (true) or without (false) an open Blocker.
@@ -333,6 +340,17 @@ func (s *Store) Issues(ctx context.Context, slug string, f IssueFilter) ([]Issue
 		where = append(where, "i.kind = ?")
 		args = append(args, f.Kind)
 	}
+	if f.NotKind != "" {
+		where = append(where, "i.kind <> ?")
+		args = append(args, f.NotKind)
+	}
+	if f.Claimed != nil {
+		not := ""
+		if !*f.Claimed {
+			not = "NOT "
+		}
+		where = append(where, not+"(i.assignee IS NOT NULL OR i.holder_session IS NOT NULL)")
+	}
 	switch f.Assignee {
 	case "":
 	case AssigneeNone:
@@ -352,6 +370,11 @@ func (s *Store) Issues(ctx context.Context, slug string, f IssueFilter) ([]Issue
 	}
 	for _, name := range f.Labels {
 		where = append(where, `EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id
+			WHERE il.issue_id = i.id AND l.name = ?)`)
+		args = append(args, name)
+	}
+	for _, name := range f.NotLabels {
+		where = append(where, `NOT EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id
 			WHERE il.issue_id = i.id AND l.name = ?)`)
 		args = append(args, name)
 	}

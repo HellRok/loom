@@ -297,16 +297,26 @@ func (s *server) home(w http.ResponseWriter, r *http.Request) {
 
 // ---- project ----
 
+var (
+	yes = true
+	no  = false
+)
+
+// frontierFilter is the Frontier of a Project: open, unblocked, unclaimed
+// Issues other than its Maps. It matches Store.Frontier's ready sort.
+var frontierFilter = store.IssueFilter{State: store.StateOpen, NotKind: store.KindMap, Blocked: &no, Claimed: &no}
+
 // A saved view is a named filter; the first is the default.
 var views = []struct {
 	Key, Name string
 	Filter    store.IssueFilter
 }{
-	{"open", "Open", store.IssueFilter{State: store.StateOpen}},
 	{"maps", "Maps", store.IssueFilter{State: store.StateOpen, Kind: store.KindMap}},
+	{viewFrontier, "Frontier", frontierFilter},
+	{"open", "Open", store.IssueFilter{State: store.StateOpen}},
+	{"in-progress", "In progress", store.IssueFilter{State: store.StateOpen, Claimed: &yes}},
+	{"blocked", "Blocked", store.IssueFilter{State: store.StateOpen, Blocked: &yes}},
 	{"needs-triage", "Needs triage", store.IssueFilter{State: store.StateOpen, Labels: []string{"needs-triage"}}},
-	{"ready-for-agent", "Ready for agent", store.IssueFilter{State: store.StateOpen, Labels: []string{"ready-for-agent"}}},
-	{"unassigned", "Unassigned", store.IssueFilter{State: store.StateOpen, Assignee: store.AssigneeNone}},
 	{"closed", "Closed", store.IssueFilter{State: store.StateClosed}},
 }
 
@@ -314,11 +324,25 @@ var views = []struct {
 type filters struct {
 	View   string
 	Labels []string
-	Q      string
+	// Untagged keeps only Issues carrying neither readiness label.
+	Untagged bool
+	Q        string
 }
 
+// readyForAgent and readyForHuman are the labels that say who an Issue is
+// ready for.
+const (
+	readyForAgent = "ready-for-agent"
+	readyForHuman = "ready-for-human"
+)
+
+var readyLabels = []string{readyForAgent, readyForHuman}
+
+// viewFrontier is the key of the Frontier saved view.
+const viewFrontier = "frontier"
+
 func parseFilters(q url.Values) filters {
-	f := filters{View: views[0].Key, Labels: q["label"], Q: strings.TrimSpace(q.Get("q"))}
+	f := filters{View: views[0].Key, Labels: q["label"], Untagged: q.Get("untagged") == "1", Q: strings.TrimSpace(q.Get("q"))}
 	for _, v := range views {
 		if q.Get("view") == v.Key {
 			f.View = v.Key
@@ -335,6 +359,9 @@ func (f filters) query() string {
 	}
 	for _, l := range f.Labels {
 		v.Add("label", l)
+	}
+	if f.Untagged {
+		v.Set("untagged", "1")
 	}
 	if f.Q != "" {
 		v.Set("q", f.Q)
@@ -379,12 +406,19 @@ func (f filters) issueFilter() store.IssueFilter {
 			out.Labels = append(out.Labels, l)
 		}
 	}
+	if f.Untagged {
+		out.NotLabels = readyLabels
+	}
 	return out
 }
+
+// withLimit is f limited to n Issues; the total Issues reports is unaffected.
+func withLimit(f store.IssueFilter, n int) store.IssueFilter { f.Limit = n; return f }
 
 type viewLink struct {
 	Name   string
 	URL    string
+	Count  int
 	Active bool
 }
 
@@ -392,6 +426,25 @@ type labelLink struct {
 	store.Label
 	URL    string
 	Active bool
+}
+
+// countPart is one piece of the Frontier's count line.
+type countPart struct {
+	Text string
+	URL  string
+}
+
+// notReady is an open ready-for-agent Issue that is not on the Frontier, and
+// why.
+type notReady struct {
+	row
+	Blockers []int64
+}
+
+// frontierView is what the Frontier view shows beyond its rows.
+type frontierView struct {
+	Counts   []countPart
+	NotReady []notReady
 }
 
 type switcherItem struct {
@@ -475,7 +528,7 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 	}
 	f := parseFilters(r.URL.Query())
 
-	data := map[string]any{"Slug": slug, "Standalone": proj.Standalone, "Title": slug, "Q": f.Q, "View": f.View, "Labels": f.Labels}
+	data := map[string]any{"Slug": slug, "Standalone": proj.Standalone, "Title": slug, "Q": f.Q, "View": f.View, "DefaultView": views[0].Key, "Labels": f.Labels, "Untagged": f.Untagged}
 
 	sums, err := s.Store.ProjectSummaries(ctx)
 	if err != nil {
@@ -491,7 +544,12 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 	var vl []viewLink
 	for _, v := range views {
 		g := filters{View: v.Key, Q: f.Q}
-		vl = append(vl, viewLink{Name: v.Name, URL: "/" + slug + g.query(), Active: v.Key == f.View})
+		_, n, err := s.Store.Issues(ctx, slug, withLimit(v.Filter, 1))
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		vl = append(vl, viewLink{Name: v.Name, URL: "/" + slug + g.query(), Count: n, Active: v.Key == f.View})
 	}
 	data["Views"] = vl
 
@@ -525,24 +583,27 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 	}
 	var rows []row
 	for _, i := range issues {
-		if f.Q != "" && !strings.Contains(strings.ToLower(i.Title), strings.ToLower(f.Q)) {
+		if !f.matchesQ(i) {
 			continue
 		}
-		rel, err := s.relations(ctx, slug, i.Number)
+		rw, err := s.listRow(ctx, slug, i, f, selected, colours, byIssue, hs)
 		if err != nil {
 			s.fail(w, r, err)
 			return
-		}
-		rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked(),
-			URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected,
-			Holder: hs.view(i.HolderSession)}
-		for _, name := range byIssue[i.Number] {
-			rw.Labels = append(rw.Labels, colours[name])
 		}
 		rows = append(rows, rw)
 	}
 	data["Rows"] = rows
 	data["Clear"] = "/" + slug
+
+	if f.View == viewFrontier {
+		fv, err := s.frontierView(ctx, slug, f, selected, colours, byIssue, hs)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		data["Frontier"] = fv
+	}
 
 	if selected != 0 {
 		iv, err := s.issueView(ctx, slug, selected, f, r.URL.Query().Get("tab"), colours)
@@ -554,6 +615,98 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 		data["Title"] = fmt.Sprintf("#%d %s · %s", iv.Number, iv.Title, slug)
 	}
 	s.render(w, r, http.StatusOK, "project", data)
+}
+
+func (f filters) matchesQ(i store.Issue) bool {
+	return f.Q == "" || strings.Contains(strings.ToLower(i.Title), strings.ToLower(f.Q))
+}
+
+// listRow is Issue i as a row of the list pane.
+func (s *server) listRow(ctx context.Context, slug string, i store.Issue, f filters, selected int64, colours map[string]store.Label, byIssue map[int64][]string, hs holders) (row, error) {
+	rel, err := s.relations(ctx, slug, i.Number)
+	if err != nil {
+		return row{}, err
+	}
+	rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked(),
+		URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected,
+		Holder: hs.view(i.HolderSession)}
+	for _, name := range byIssue[i.Number] {
+		rw.Labels = append(rw.Labels, colours[name])
+	}
+	return rw, nil
+}
+
+// frontierView counts the Frontier by readiness label and lists the open
+// ready-for-agent Issues that are tagged ready but are blocked or claimed.
+func (s *server) frontierView(ctx context.Context, slug string, f filters, selected int64, colours map[string]store.Label, byIssue map[int64][]string, hs holders) (frontierView, error) {
+	count := func(mod func(*store.IssueFilter)) (int, error) {
+		sf := withLimit(frontierFilter, 1)
+		mod(&sf)
+		_, n, err := s.Store.Issues(ctx, slug, sf)
+		return n, err
+	}
+	base := filters{View: viewFrontier, Q: f.Q}
+	var fv frontierView
+	ready, err := count(func(*store.IssueFilter) {})
+	if err != nil {
+		return fv, err
+	}
+	fv.Counts = append(fv.Counts, countPart{Text: strconv.Itoa(ready) + " ready", URL: "/" + slug + base.query()})
+	for _, l := range readyLabels {
+		n, err := count(func(sf *store.IssueFilter) { sf.Labels = []string{l} })
+		if err != nil {
+			return fv, err
+		}
+		fv.Counts = append(fv.Counts, countPart{Text: strconv.Itoa(n) + " " + l, URL: "/" + slug + base.withLabel(l).query()})
+	}
+	n, err := count(func(sf *store.IssueFilter) { sf.NotLabels = readyLabels })
+	if err != nil {
+		return fv, err
+	}
+	untagged := base
+	untagged.Untagged = true
+	fv.Counts = append(fv.Counts, countPart{Text: strconv.Itoa(n) + " untagged", URL: "/" + slug + untagged.query()})
+
+	tagged := f.issueFilter()
+	tagged.Blocked, tagged.Claimed = nil, nil
+	tagged.Labels = append([]string{readyForAgent}, withoutLabel(tagged.Labels, readyForAgent)...)
+	cands, _, err := s.Store.Issues(ctx, slug, tagged)
+	if err != nil {
+		return fv, err
+	}
+	for _, i := range cands {
+		if !f.matchesQ(i) {
+			continue
+		}
+		open, err := s.Store.OpenBlockers(ctx, slug, i.Number)
+		if err != nil {
+			return fv, err
+		}
+		if len(open) == 0 && !i.Claimed() {
+			continue
+		}
+		rw, err := s.listRow(ctx, slug, i, f, selected, colours, byIssue, hs)
+		if err != nil {
+			return fv, err
+		}
+		rw.Blocked = len(open) > 0
+		nr := notReady{row: rw}
+		for _, b := range open {
+			nr.Blockers = append(nr.Blockers, b.Number)
+		}
+		fv.NotReady = append(fv.NotReady, nr)
+	}
+	return fv, nil
+}
+
+func withoutLabel(ls []string, name string) []string {
+	var out []string
+	for _, l := range ls {
+		if l != name {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func (s *server) issueView(ctx context.Context, slug string, n int64, f filters, tab string, colours map[string]store.Label) (issueView, error) {

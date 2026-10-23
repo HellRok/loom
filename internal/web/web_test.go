@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -64,6 +65,9 @@ func seed(t *testing.T) *fixture {
 	mk(store.KindIssue, "Fix the bug", "Details", "bug", "ready-for-agent")
 	mk(store.KindIssue, "Old thing", "done")
 	if _, _, err := st.CloseIssue(ctx, "loom", 4, "Closing it.", false, actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddBlockers(ctx, "loom", 2, []int64{3, 4}, actor); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.AddComment(ctx, "loom", 2, "A *comment* mentioning #3 and other#9.", actor); err != nil {
@@ -181,13 +185,17 @@ func TestProjectPage(t *testing.T) {
 		// Saved views.
 		var names []string
 		doc.Find(".views li a").Each(func(_ int, s *goquery.Selection) { names = append(names, s.Text()) })
-		if got := strings.Join(names, ","); got != "Open,Maps,Needs triage,Ready for agent,Unassigned,Closed" {
+		if got := strings.Join(names, ","); got != "Maps,Frontier,Open,In progress,Blocked,Needs triage,Closed" {
 			t.Errorf("views = %s", got)
 		}
 		// Labels with counts.
 		if got := text(doc, ".labels li:has(.label-yellow:contains('needs-triage'))"); got != "needs-triage 1" {
 			t.Errorf("needs-triage label = %q", got)
 		}
+		// Maps is the default view.
+		expect(t, doc, ".rows .row", 1)
+		expect(t, doc, "#row-1", 1)
+		_, doc = f.get("/loom?view=open", "")
 		// Open view: #1, #2, #3 oldest first, closed #4 excluded.
 		expect(t, doc, ".rows .row", 3)
 		r2 := doc.Find("#row-2")
@@ -209,40 +217,30 @@ func TestProjectPage(t *testing.T) {
 	})
 
 	t.Run("fragments", func(t *testing.T) {
-		_, doc := f.get("/loom", "list-pane")
+		_, doc := f.get("/loom?view=open", "list-pane")
 		expect(t, doc, "head title", 0)
 		expect(t, doc, "section#list-pane .row", 3)
 		expect(t, doc, "nav", 0)
-		_, doc = f.get("/loom", "main")
+		_, doc = f.get("/loom?view=open", "main")
 		expect(t, doc, "head title", 0)
 		expect(t, doc, "nav.nav", 1)
 		expect(t, doc, ".row", 3)
 	})
 
-	t.Run("saved views", func(t *testing.T) {
-		for view, want := range map[string]int{"maps": 1, "needs-triage": 1, "ready-for-agent": 1, "unassigned": 3, "closed": 1, "": 3, "bogus": 3} {
-			_, doc := f.get("/loom?view="+view, "")
-			expect(t, doc, ".rows .row", want)
-			if view == "closed" {
-				expect(t, doc, "#row-4.status-closed", 1)
-			}
-		}
-	})
-
 	t.Run("filters", func(t *testing.T) {
-		_, doc := f.get("/loom?label=bug", "")
+		_, doc := f.get("/loom?view=open&label=bug", "")
 		expect(t, doc, ".rows .row", 1)
 		expect(t, doc, "#row-3", 1)
 		if got := doc.Find(".labels li.active").Length(); got != 1 {
 			t.Errorf("active labels = %d", got)
 		}
-		_, doc = f.get("/loom?q=WEB", "")
+		_, doc = f.get("/loom?view=open&q=WEB", "")
 		expect(t, doc, ".rows .row", 1)
 		expect(t, doc, "#row-2", 1)
 		// Filters ride along in the Issue links.
-		_, doc = f.get("/loom?view=ready-for-agent&label=bug&q=fix", "")
+		_, doc = f.get("/loom?view=frontier&label=bug&q=fix", "")
 		href := doc.Find("#row-3 a").AttrOr("href", "")
-		if href != "/loom/issues/3?label=bug&q=fix&view=ready-for-agent" {
+		if href != "/loom/issues/3?label=bug&q=fix&view=frontier" {
 			t.Errorf("row href = %q", href)
 		}
 	})
@@ -258,6 +256,95 @@ func TestProjectPage(t *testing.T) {
 			t.Errorf("fragment status %d", rec.Code)
 		}
 		expect(t, doc, "head title", 0)
+	})
+}
+
+// rowNumbers are the Issue numbers listed, in order.
+func rowNumbers(doc *goquery.Document) string {
+	var ns []string
+	doc.Find(".rows .row .num").Each(func(_ int, s *goquery.Selection) { ns = append(ns, s.Text()) })
+	return strings.Join(ns, " ")
+}
+
+func TestSavedViews(t *testing.T) {
+	t.Run("list, order and default", func(t *testing.T) {
+		_, doc := seed(t).get("/loom", "")
+		var hrefs []string
+		doc.Find(".views li a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
+		want := "/loom /loom?view=frontier /loom?view=open /loom?view=in-progress /loom?view=blocked /loom?view=needs-triage /loom?view=closed"
+		if got := strings.Join(hrefs, " "); got != want {
+			t.Errorf("view links = %s, want %s", got, want)
+		}
+		if got := text(doc, ".views li.active"); !strings.HasPrefix(got, "Maps") {
+			t.Errorf("default view = %q, want Maps", got)
+		}
+		_, doc = seed(t).get("/loom?view=bogus", "")
+		if got := text(doc, ".views li.active"); !strings.HasPrefix(got, "Maps") {
+			t.Errorf("unknown view fell back to %q, want Maps", got)
+		}
+	})
+
+	t.Run("rows and counts", func(t *testing.T) {
+		f := seed(t)
+		for _, c := range []struct{ view, rows string }{
+			{"maps", "#1"},
+			{"frontier", "#3"},
+			{"open", "#1 #2 #3"},
+			{"in-progress", ""},
+			{"blocked", "#2"},
+			{"needs-triage", "#2"},
+			{"closed", "#4"},
+		} {
+			_, doc := f.get("/loom?view="+c.view, "")
+			if got := rowNumbers(doc); got != c.rows {
+				t.Errorf("view %s lists %q, want %q", c.view, got, c.rows)
+			}
+			if got, want := text(doc, ".views li.active .count"), len(strings.Fields(c.rows)); got != strconv.Itoa(want) {
+				t.Errorf("view %s count = %q, want %d", c.view, got, want)
+			}
+		}
+	})
+
+	t.Run("in progress is held by a Session", func(t *testing.T) {
+		f := seed(t)
+		if _, _, err := f.st.ClaimIssue(context.Background(), "loom", 3, actor); err != nil {
+			t.Fatal(err)
+		}
+		_, doc := f.get("/loom?view=in-progress", "")
+		if got := rowNumbers(doc); got != "#3" {
+			t.Errorf("in progress lists %q, want #3", got)
+		}
+		_, doc = f.get("/loom?view=frontier", "")
+		if got := rowNumbers(doc); got != "" {
+			t.Errorf("claimed Issue still in the Frontier: %q", got)
+		}
+	})
+
+	t.Run("frontier ignores the ready-for-agent tag", func(t *testing.T) {
+		f := seed(t)
+		// #2 is not tagged ready-for-agent; unblocking it still adds it to the Frontier.
+		if _, err := f.st.RemoveBlockers(context.Background(), "loom", 2, []int64{3}, actor); err != nil {
+			t.Fatal(err)
+		}
+		_, doc := f.get("/loom?view=frontier", "")
+		if got := rowNumbers(doc); got != "#2 #3" {
+			t.Errorf("frontier lists %q, want #2 #3 oldest first", got)
+		}
+	})
+
+	t.Run("label filters compose with a view", func(t *testing.T) {
+		f := seed(t)
+		for _, c := range []struct{ query, rows string }{
+			{"view=frontier&label=ready-for-agent", "#3"},
+			{"view=frontier&label=needs-triage", ""},
+			{"view=blocked&label=needs-triage", "#2"},
+			{"view=closed&label=bug", ""},
+		} {
+			_, doc := f.get("/loom?"+c.query, "")
+			if got := rowNumbers(doc); got != c.rows {
+				t.Errorf("%s lists %q, want %q", c.query, got, c.rows)
+			}
+		}
 	})
 }
 
@@ -310,7 +397,7 @@ func TestIssueOverview(t *testing.T) {
 	}
 
 	t.Run("full page", func(t *testing.T) {
-		rec, doc := f.get("/loom/issues/2", "")
+		rec, doc := f.get("/loom/issues/2?view=open", "")
 		if rec.Code != 200 {
 			t.Fatalf("status %d", rec.Code)
 		}
@@ -411,4 +498,86 @@ func TestStatic(t *testing.T) {
 	if rec, _ := f.get("/static/missing.js", ""); rec.Code != 404 {
 		t.Errorf("missing asset: status %d", rec.Code)
 	}
+}
+
+var sessOther = store.Actor{Name: "Tess Ter", Session: "other-session-00007f3a"}
+
+// seedFrontier adds to seed's Project: ready-for-human #5, untagged #6,
+// ready-for-agent #7 held by another Session, and ready-for-agent #8 blocked
+// by #6.
+func seedFrontier(t *testing.T) *fixture {
+	t.Helper()
+	f := seed(t)
+	ctx := context.Background()
+	mk := func(title string, blockedBy []int64, labels ...string) {
+		if _, err := f.st.CreateIssue(ctx, "loom", actor, store.NewIssue{Kind: store.KindIssue, Title: title, Labels: labels, BlockedBy: blockedBy}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("Human decides", nil, "ready-for-human")
+	mk("Untagged", nil)
+	mk("Held by someone", nil, "ready-for-agent")
+	mk("Waits on untagged", []int64{6}, "ready-for-agent")
+	if _, _, err := f.st.ClaimIssue(ctx, "loom", 7, sessOther); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func TestFrontierView(t *testing.T) {
+	f := seedFrontier(t)
+
+	t.Run("count line splits by label", func(t *testing.T) {
+		_, doc := f.get("/loom?view=frontier", "")
+		if got := rowNumbers(doc); got != "#3 #5 #6" {
+			t.Errorf("frontier lists %q", got)
+		}
+		if got := text(doc, ".frontier-counts"); got != "3 ready · 1 ready-for-agent · 1 ready-for-human · 1 untagged" {
+			t.Errorf("count line = %q", got)
+		}
+		var hrefs []string
+		doc.Find(".frontier-counts a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
+		want := "/loom?view=frontier /loom?label=ready-for-agent&view=frontier /loom?label=ready-for-human&view=frontier /loom?untagged=1&view=frontier"
+		if got := strings.Join(hrefs, " "); got != want {
+			t.Errorf("count line links = %s, want %s", got, want)
+		}
+	})
+
+	t.Run("click-throughs filter the list", func(t *testing.T) {
+		for _, c := range []struct{ query, rows string }{
+			{"view=frontier&label=ready-for-agent", "#3"},
+			{"view=frontier&label=ready-for-human", "#5"},
+			{"view=frontier&untagged=1", "#6"},
+		} {
+			_, doc := f.get("/loom?"+c.query, "")
+			if got := rowNumbers(doc); got != c.rows {
+				t.Errorf("%s lists %q, want %q", c.query, got, c.rows)
+			}
+		}
+	})
+
+	t.Run("count line only on the Frontier", func(t *testing.T) {
+		_, doc := f.get("/loom?view=open", "")
+		expect(t, doc, ".frontier-counts", 0)
+		expect(t, doc, ".not-ready", 0)
+	})
+
+	t.Run("tagged ready-for-agent but not ready", func(t *testing.T) {
+		_, doc := f.get("/loom?view=frontier", "")
+		expect(t, doc, ".not-ready li", 2)
+		if got := text(doc, ".not-ready #row-7 .reason"); got != "held by 00007f3a" {
+			t.Errorf("#7 reason = %q", got)
+		}
+		if got := text(doc, ".not-ready #row-8 .reason"); got != "blocked by #6" {
+			t.Errorf("#8 reason = %q", got)
+		}
+		// The ready rows stay apart from the muted group.
+		expect(t, doc, ".rows .row", 3)
+	})
+
+	t.Run("group is hidden when empty", func(t *testing.T) {
+		_, doc := seed(t).get("/loom?view=frontier", "")
+		expect(t, doc, ".not-ready", 0)
+		expect(t, doc, ".frontier-counts", 1)
+	})
 }

@@ -11,7 +11,7 @@
   </ul>
   <h2>Views</h2>
   <ul class="views">
-    {{range .Views}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}}</a></li>{{end}}
+    {{range .Views}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}}</a> <span class="count">{{.Count}}</span></li>{{end}}
   </ul>
   {{if .Standalone}}<h2>Reference</h2>
   <ul class="reference">
@@ -25,13 +25,15 @@
 
 {{define "list-pane"}}<section class="list" id="list-pane" aria-label="Issues" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
   <form class="filter" method="get" action="/{{.Slug}}">
-    {{if ne .View "open"}}<input type="hidden" name="view" value="{{.View}}">{{end}}
+    {{if ne .View .DefaultView}}<input type="hidden" name="view" value="{{.View}}">{{end}}
     {{range .Labels}}<input type="hidden" name="label" value="{{.}}">{{end}}
+    {{if .Untagged}}<input type="hidden" name="untagged" value="1">{{end}}
     <input type="search" name="q" value="{{.Q}}" placeholder="Filter by title" aria-label="Filter by title">
     <button type="submit">Filter</button>
-    {{if or .Q .Labels}}<a class="clear" href="{{.Clear}}" hx-get="{{.Clear}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">clear</a>{{end}}
+    {{if or .Q .Labels .Untagged}}<a class="clear" href="{{.Clear}}" hx-get="{{.Clear}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">clear</a>{{end}}
   </form>
-  <p class="active-filters">{{len .Rows}} shown{{if .Labels}} · labels: {{range .Labels}}<span class="chip">{{.}}</span>{{end}}{{end}}{{if .Q}} · matching <span class="chip">{{.Q}}</span>{{end}}</p>
+  {{with .Frontier}}<p class="frontier-counts">{{range $i, $p := .Counts}}{{if $i}} · {{end}}<a href="{{$p.URL}}" hx-get="{{$p.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{$p.Text}}</a>{{end}}</p>{{end}}
+  <p class="active-filters">{{len .Rows}} shown{{if .Labels}} · labels: {{range .Labels}}<span class="chip">{{.}}</span>{{end}}{{end}}{{if .Untagged}} · <span class="chip">untagged</span>{{end}}{{if .Q}} · matching <span class="chip">{{.Q}}</span>{{end}}</p>
   <ul class="rows">
     {{range .Rows}}
     <li class="row status-{{.Status}}{{if .Selected}} selected{{end}}" id="row-{{.Number}}">
@@ -47,6 +49,18 @@
     </li>
     {{else}}<li class="empty">No Issues match.</li>{{end}}
   </ul>
+  {{with .Frontier}}{{if .NotReady}}<h2 class="not-ready-heading">Tagged <code>ready-for-agent</code>, not ready</h2>
+  <ul class="not-ready">
+    {{range .NotReady}}
+    <li class="row status-{{.Status}}{{if .Selected}} selected{{end}}" id="row-{{.Number}}">
+      <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true">
+        <span class="num">#{{.Number}}</span>
+        <span class="title">{{.Title}}</span>
+        <span class="reason">{{if .Blockers}}blocked by {{range $i, $b := .Blockers}}{{if $i}}, {{end}}#{{$b}}{{end}}{{else if .Holder}}held by {{.Holder.Short}}{{else}}claimed{{end}}</span>
+      </a>
+    </li>
+    {{end}}
+  </ul>{{end}}{{end}}
 </section>{{end}}
 
 {{define "issue-pane"}}<article class="issue" id="issue-pane" aria-label="Issue"{{with .Issue}} data-live hx-get="{{.Self}}" hx-trigger="sse:issue-{{.Number}}, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML"{{end}}>
