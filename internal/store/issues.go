@@ -118,8 +118,6 @@ type IssueFilter struct {
 	// Labels are all required; NoLabels selects Issues with none.
 	Labels   []string
 	NoLabels bool
-	// NotLabels excludes Issues carrying any of them.
-	NotLabels []string
 	// Parent selects the children of that Issue number, when above zero.
 	Parent int64
 	// Blocked selects Issues with (true) or without (false) an open Blocker.
@@ -373,11 +371,6 @@ func (s *Store) Issues(ctx context.Context, slug string, f IssueFilter) ([]Issue
 	}
 	for _, name := range f.Labels {
 		where = append(where, `EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id
-			WHERE il.issue_id = i.id AND l.name = ?)`)
-		args = append(args, name)
-	}
-	for _, name := range f.NotLabels {
-		where = append(where, `NOT EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id
 			WHERE il.issue_id = i.id AND l.name = ?)`)
 		args = append(args, name)
 	}

@@ -87,19 +87,6 @@ func TestIssueFilterFrontier(t *testing.T) {
 	}
 }
 
-func TestIssueFilterNotLabels(t *testing.T) {
-	st := filterFixture(t)
-	got, _, err := st.Issues(context.Background(), "app", store.IssueFilter{
-		State: store.StateOpen, NotKind: store.KindMap, NotLabels: []string{"ready-for-agent", "ready-for-human"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := []int64{2, 3, 4, 6}; !reflect.DeepEqual(numbers(got), want) {
-		t.Errorf("without the ready labels = %v, want %v", numbers(got), want)
-	}
-}
-
 func TestIssueFilterNoOpenChildren(t *testing.T) {
 	ctx := context.Background()
 	st := filterFixture(t)
