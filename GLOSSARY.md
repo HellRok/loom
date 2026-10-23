@@ -53,7 +53,7 @@ An Issue that must be closed before another Issue it blocks can be taken.
 _Avoid_: Dependency, prerequisite
 
 **Open child**:
-A child Issue that isn't closed yet (closing as won't-fix counts as closed). While an Issue other than a Map has one, it can't be taken, as if blocked, but no Blocker is recorded: the block lifts by itself when the last child closes.
+A child Issue that isn't closed yet (closing as won't-fix counts as closed). A closed child doesn't hide the open Issues below it: they count as the Issue's open children too. While an Issue other than a Map has one, it can't be taken, as if blocked, but no Blocker is recorded: the block lifts by itself when the last one closes.
 _Avoid_: Sub-issue, implicit blocker
 
 **Frontier**:

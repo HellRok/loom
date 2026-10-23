@@ -44,6 +44,9 @@ type Relations struct {
 	Blockers []Ref
 	Blocks   []Ref
 	Children []Ref
+	// OpenChildren counts the children it is waiting on: the open ones, and
+	// the open descendants below closed ones. A Map has none.
+	OpenChildren int
 }
 
 // blocked reports whether any Blocker is still open.
@@ -54,21 +57,6 @@ func (r Relations) blocked() bool {
 		}
 	}
 	return false
-}
-
-// openChildren counts the Issue's children that aren't closed. An Issue other
-// than a Map that has any is waiting on them, as if blocked.
-func (r Relations) openChildren(i store.Issue) int {
-	if i.Kind == store.KindMap {
-		return 0
-	}
-	n := 0
-	for _, c := range r.Children {
-		if !c.Closed {
-			n++
-		}
-	}
-	return n
 }
 
 // waitingText says how many open children an Issue is waiting on.
@@ -706,8 +694,7 @@ func (s *server) listRow(ctx context.Context, slug string, i store.Issue, f filt
 	if err != nil {
 		return row{}, err
 	}
-	open := rel.openChildren(i)
-	rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked() || open > 0, OpenChildren: open,
+	rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked() || rel.OpenChildren > 0, OpenChildren: rel.OpenChildren,
 		URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected,
 		Holder: hs.view(i.HolderSession)}
 	for _, name := range byIssue[i.Number] {
@@ -806,8 +793,7 @@ func (s *server) issueView(ctx context.Context, slug string, n int64, f filters,
 	if err != nil {
 		return issueView{}, err
 	}
-	open := rel.openChildren(i)
-	iv := issueView{Issue: i, Slug: slug, Blocked: rel.blocked() || open > 0, OpenChildren: open, Body: renderMarkdown(slug, i.Body), Query: f.query()}
+	iv := issueView{Issue: i, Slug: slug, Blocked: rel.blocked() || rel.OpenChildren > 0, OpenChildren: rel.OpenChildren, Body: renderMarkdown(slug, i.Body), Query: f.query()}
 	link := func(r Ref) refLink {
 		return refLink{Ref: r, URL: "/" + slug + "/issues/" + strconv.FormatInt(r.Number, 10) + iv.Query}
 	}

@@ -183,9 +183,9 @@ type viewIssueOut struct {
 	BlockedBy     []issueLink `json:"blocked_by" jsonschema:"Every Blocker, open or closed"`
 	// Children are summaries, without bodies.
 	Children []issueSummary `json:"children"`
-	// OpenChildren are the children not yet closed. Unless the Issue is a Map,
+	// OpenChildren are the children not yet closed, and the open Issues below closed ones. Unless the Issue is a Map,
 	// it can't be claimed while there are any, though they aren't Blockers.
-	OpenChildren []string      `json:"open_children" jsonschema:"Children not yet closed; while there are any, an Issue other than a Map can't be claimed"`
+	OpenChildren []string      `json:"open_children" jsonschema:"Children not yet closed, and open Issues below closed children; while there are any, an Issue other than a Map can't be claimed"`
 	Body         string        `json:"body"`
 	Comments     *[]commentOut `json:"comments,omitempty"`
 	Events       *[]eventOut   `json:"events,omitempty"`

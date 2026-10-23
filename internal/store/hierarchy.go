@@ -352,26 +352,15 @@ func (s *Store) OpenBlockers(ctx context.Context, slug string, n int64) ([]Issue
 	return slices.DeleteFunc(is, func(i Issue) bool { return i.State != StateOpen }), nil
 }
 
-// OpenChildren lists the open children of Issue n: while there are any, n
-// other than a Map can't be taken, as if blocked, though no Blocker is
-// recorded. A Map has none that count.
+// OpenChildren lists the open children of Issue n, and the open descendants
+// below any closed child: while there are any, n can't be taken, as if
+// blocked, though no Blocker is recorded. A Map has none that count.
 func (s *Store) OpenChildren(ctx context.Context, slug string, n int64) ([]Issue, error) {
-	i, err := s.Issue(ctx, slug, n)
+	id, i, err := issue(ctx, s.db, slug, n)
 	if err != nil {
 		return nil, err
 	}
-	return s.openChildrenOf(ctx, slug, i)
-}
-
-func (s *Store) openChildrenOf(ctx context.Context, slug string, i Issue) ([]Issue, error) {
-	if i.Kind == KindMap {
-		return nil, nil
-	}
-	kids, err := s.Children(ctx, slug, i.Number)
-	if err != nil {
-		return nil, err
-	}
-	return slices.DeleteFunc(kids, func(k Issue) bool { return k.State != StateOpen }), nil
+	return openChildrenTx(ctx, s.db, id, i.Kind)
 }
 
 // Frontier is the open children of an Issue, sorted into those ready to take
@@ -405,7 +394,7 @@ func (s *Store) Frontier(ctx context.Context, slug string, parent int64) (Fronti
 		if err != nil {
 			return Frontier{}, err
 		}
-		kids, err := s.openChildrenOf(ctx, slug, k)
+		kids, err := s.OpenChildren(ctx, slug, k.Number)
 		if err != nil {
 			return Frontier{}, err
 		}

@@ -126,7 +126,7 @@ func NewServer(d Deps) *mcp.Server {
 
 	add(s, h, &mcp.Tool{
 		Name:        "frontier",
-		Description: "The open, unblocked, unclaimed children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked (an open Blocker, or open children of their own).",
+		Description: "The open, unblocked, unclaimed children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked (an open Blocker, or open children or descendants of their own).",
 	}, h.frontier)
 	add(s, h, &mcp.Tool{
 		Name:        "set_parent",
@@ -142,7 +142,7 @@ func NewServer(d Deps) *mcp.Server {
 	}, h.removeBlockers)
 	add(s, h, &mcp.Tool{
 		Name:        "claim",
-		Description: "Atomically take an open, unblocked Issue: assigns it to the configured human and records your Session as its holder. Returns already: true if your Session already holds it; refused with already_claimed (holder, holder_session, claimed_at) if another does, and for a closed or blocked Issue, or one other than a Map that still has open children (issue_has_open_children).",
+		Description: "Atomically take an open, unblocked Issue: assigns it to the configured human and records your Session as its holder. Returns already: true if your Session already holds it; refused with already_claimed (holder, holder_session, claimed_at) if another does, and for a closed or blocked Issue, or one other than a Map that still has open children, counting through closed ones (issue_has_open_children).",
 	}, h.claim)
 	add(s, h, &mcp.Tool{
 		Name:        "release",

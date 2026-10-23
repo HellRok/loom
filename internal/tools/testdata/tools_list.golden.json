@@ -110,7 +110,7 @@
     }
   },
   {
-    "description": "Atomically take an open, unblocked Issue: assigns it to the configured human and records your Session as its holder. Returns already: true if your Session already holds it; refused with already_claimed (holder, holder_session, claimed_at) if another does, and for a closed or blocked Issue, or one other than a Map that still has open children (issue_has_open_children).",
+    "description": "Atomically take an open, unblocked Issue: assigns it to the configured human and records your Session as its holder. Returns already: true if your Session already holds it; refused with already_claimed (holder, holder_session, claimed_at) if another does, and for a closed or blocked Issue, or one other than a Map that still has open children, counting through closed ones (issue_has_open_children).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -674,7 +674,7 @@
     }
   },
   {
-    "description": "The open, unblocked, unclaimed children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked (an open Blocker, or open children of their own).",
+    "description": "The open, unblocked, unclaimed children of an Issue (a Map, or a spec) in creation order: take the first. `skipped` lists the open children left out as claimed or blocked (an open Blocker, or open children or descendants of their own).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -811,7 +811,7 @@
           "additionalProperties": false,
           "properties": {
             "blocked": {
-              "description": "Open children with an open Blocker or an open child of their own",
+              "description": "Open children with an open Blocker or open children of their own",
               "items": {
                 "type": "string"
               },
@@ -1885,7 +1885,7 @@
           ]
         },
         "open_children": {
-          "description": "Children not yet closed; while there are any, an Issue other than a Map can't be claimed",
+          "description": "Children not yet closed, and open Issues below closed children; while there are any, an Issue other than a Map can't be claimed",
           "items": {
             "type": "string"
           },

@@ -127,3 +127,26 @@ func TestIssueFilterNoOpenChildren(t *testing.T) {
 		t.Errorf("after the child closes = %v, want %v", numbers(got), want)
 	}
 }
+
+func TestIssueFilterNoOpenChildrenCountsDescendants(t *testing.T) {
+	ctx := context.Background()
+	st := filterFixture(t)
+	mk := func(parent int64) {
+		if _, err := st.CreateIssue(ctx, "app", filterActor, store.NewIssue{Kind: store.KindIssue, Title: "t", Parent: parent}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk(2) // #8
+	mk(8) // #9
+	if _, _, err := st.CloseIssue(ctx, "app", 8, "", false, filterActor); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := st.Issues(ctx, "app", store.IssueFilter{State: store.StateOpen, NoOpenChildren: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// #2's only child is closed, but its grandchild #9 is open.
+	if want := []int64{1, 3, 4, 6, 7, 9}; !reflect.DeepEqual(numbers(got), want) {
+		t.Errorf("open without open descendants = %v, want %v", numbers(got), want)
+	}
+}

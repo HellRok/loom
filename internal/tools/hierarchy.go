@@ -113,7 +113,7 @@ type frontierIn struct {
 
 type skippedOut struct {
 	Claimed []string `json:"claimed" jsonschema:"Open, unblocked children somebody holds"`
-	Blocked []string `json:"blocked" jsonschema:"Open children with an open Blocker or an open child of their own"`
+	Blocked []string `json:"blocked" jsonschema:"Open children with an open Blocker or open children of their own"`
 }
 
 type frontierOut struct {

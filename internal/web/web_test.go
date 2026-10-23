@@ -725,6 +725,27 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 		}
 	})
 
+	t.Run("a closed child doesn't hide its open descendants", func(t *testing.T) {
+		ctx := context.Background()
+		if _, err := f.st.CreateIssue(ctx, "loom", actor, store.NewIssue{Kind: store.KindIssue, Title: "Grandchild", Parent: 2}); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := f.st.CloseIssue(ctx, "loom", 2, "", false, actor); err != nil {
+			t.Fatal(err)
+		}
+		_, doc := f.get("/loom?view=open", "")
+		if got := text(doc, "#row-1 .waiting"); got != "waiting on 1 open child" {
+			t.Errorf("#1 waiting = %q", got)
+		}
+		_, doc = f.get("/loom?view=frontier", "")
+		if got := rowNumbers(doc); got != "#4 #5 #6" {
+			t.Errorf("frontier lists %q", got)
+		}
+		if _, _, err := f.st.CloseIssue(ctx, "loom", 6, "", true, actor); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("lifts when the last child closes", func(t *testing.T) {
 		if _, _, err := f.st.CloseIssue(context.Background(), "loom", 2, "", true, actor); err != nil {
 			t.Fatal(err)

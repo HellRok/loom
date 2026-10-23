@@ -55,6 +55,34 @@ func TestOpenChildrenBlockTransitively(t *testing.T) {
 	h.mustOK(h.call(dir, "claim", map[string]any{"ref": grand}))
 }
 
+func TestOpenDescendantsBlockThroughClosedChildren(t *testing.T) {
+	h := newHarness(t)
+	dir := h.project("app")
+	spec := h.issue(dir, map[string]any{"title": "spec"})
+	grand := h.issue(dir, map[string]any{"title": "grandparent", "parent": spec})
+	parent := h.issue(dir, map[string]any{"title": "parent", "parent": grand})
+	leaf := h.issue(dir, map[string]any{"title": "leaf", "parent": parent})
+
+	// Closing a parent with open children is allowed, but its open
+	// descendant keeps the grandparent blocked.
+	h.mustOK(h.call(dir, "close", map[string]any{"ref": parent}))
+	r := h.call(dir, "claim", map[string]any{"ref": grand})
+	if r.code() != "issue_has_open_children" || !reflect.DeepEqual(strs(r.Err["open_children"]), []string{leaf}) {
+		t.Fatalf("claim = %v", r)
+	}
+	view := h.mustOK(h.call(dir, "view_issue", map[string]any{"ref": grand}))
+	if got := strs(view["open_children"]); !reflect.DeepEqual(got, []string{leaf}) {
+		t.Fatalf("open_children = %v", got)
+	}
+	out := h.mustOK(h.call(dir, "frontier", map[string]any{"parent": spec}))
+	if got := strs(out["skipped"].(map[string]any)["blocked"]); !reflect.DeepEqual(got, []string{grand}) {
+		t.Fatalf("skipped.blocked = %v", got)
+	}
+
+	h.mustOK(h.call(dir, "close", map[string]any{"ref": leaf, "wontfix": true}))
+	h.mustOK(h.call(dir, "claim", map[string]any{"ref": grand}))
+}
+
 func TestMapsAreNotBlockedByOpenChildren(t *testing.T) {
 	h := newHarness(t)
 	dir := h.project("app")

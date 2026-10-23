@@ -45,7 +45,11 @@ func (g storeGraph) Relations(ctx context.Context, slug string, n int64) (Relati
 	if err != nil {
 		return r, err
 	}
-	r.Blockers, r.Blocks, r.Children = refs(blockers), refs(blocks), refs(kids)
+	open, err := g.st.OpenChildren(ctx, slug, n)
+	if err != nil {
+		return r, err
+	}
+	r.Blockers, r.Blocks, r.Children, r.OpenChildren = refs(blockers), refs(blocks), refs(kids), len(open)
 	return r, nil
 }
 

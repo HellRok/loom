@@ -121,13 +121,20 @@ func openBlockersTx(ctx context.Context, q querier, id int64) ([]Issue, error) {
 }
 
 // openChildrenTx lists the open children of the Issue of that kind with row
-// id, by number. A Map has none that count: it closes on judgement.
+// id, by number. A closed child doesn't hide its own open descendants: they
+// count too, so closing a parent with open children doesn't free its parent.
+// A Map has none that count: it closes on judgement.
 func openChildrenTx(ctx context.Context, q querier, id int64, kind string) ([]Issue, error) {
 	if kind == KindMap {
 		return nil, nil
 	}
 	rows, err := q.QueryContext(ctx, `
-		SELECT `+issueCols+` FROM issues i WHERE i.parent_id = ? AND i.state = ? ORDER BY i.number`, id, StateOpen)
+		WITH RECURSIVE closed(id) AS (
+			SELECT id FROM issues WHERE parent_id = ?1 AND state = 'closed'
+			UNION SELECT c.id FROM issues c JOIN closed ON c.parent_id = closed.id WHERE c.state = 'closed')
+		SELECT `+issueCols+` FROM issues i
+		WHERE i.state = 'open' AND (i.parent_id = ?1 OR i.parent_id IN (SELECT id FROM closed))
+		ORDER BY i.number`, id)
 	if err != nil {
 		return nil, err
 	}
