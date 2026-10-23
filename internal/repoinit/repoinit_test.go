@@ -166,6 +166,24 @@ func TestConventionsOmitTheDocOnlyParts(t *testing.T) {
 	}
 }
 
+func TestStandaloneConventionsOmitTheCommitTrailer(t *testing.T) {
+	for _, unwanted := range []string{"Loom:", "trailer", "## Commits", "**Commits**"} {
+		if strings.Contains(repoinit.StandaloneConventions, unwanted) {
+			t.Errorf("standalone conventions include %q", unwanted)
+		}
+	}
+	for _, want := range []string{
+		"## Closing work",
+		"citing the commit SHA",
+		"never write a bare `#N`",
+		"## Wayfinding operations",
+	} {
+		if !strings.Contains(repoinit.StandaloneConventions, want) {
+			t.Errorf("standalone conventions lack %q", want)
+		}
+	}
+}
+
 func TestTrackerDocCarriesTheRequiredGuidance(t *testing.T) {
 	for _, want := range []string{
 		"Written by `loom init`",

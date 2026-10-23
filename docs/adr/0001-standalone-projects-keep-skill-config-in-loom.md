@@ -11,3 +11,4 @@ Some repos can't carry the `mattpocock/skills` config files (e.g. a team repo wh
 
 - Standalone is a stored property of the Project, since the instructions differ; switching a Project back to plain keeps its Glossary but stops showing it to agents.
 - Instructions are per-cwd, so the shim contacts the daemon before answering `initialize`, falling back to static conditional text after a short timeout.
+- Standalone instructions omit the commit-trailer convention: the repo's commits aren't Loom's to shape, so agents are told to close Issues citing the commit SHA but never to add a `Loom:` trailer.

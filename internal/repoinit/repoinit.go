@@ -10,16 +10,31 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 )
+
+//go:embed conventions.md.tmpl
+var conventionsTmpl string
 
 // Conventions is everything the tracker doc tells an agent about using Loom
 // as the issue tracker, without the parts that only make sense in a doc
 // written into a repo. The tracker doc and the MCP instructions are both
 // built from it. Its first paragraph is the introduction; the rest follows
 // the doc's registration paragraph.
-//
-//go:embed conventions.md
-var Conventions string
+var Conventions = conventions(true)
+
+// StandaloneConventions is Conventions for a Standalone Project, whose repo
+// carries no Loom conventions: it leaves out the commit trailer.
+var StandaloneConventions = conventions(false)
+
+func conventions(trailers bool) string {
+	var b strings.Builder
+	t := template.Must(template.New("conventions").Parse(conventionsTmpl))
+	if err := t.Execute(&b, struct{ Trailers bool }{trailers}); err != nil {
+		panic(err)
+	}
+	return b.String()
+}
 
 const (
 	docTitle = "# Issue tracker: Loom\n\n" +

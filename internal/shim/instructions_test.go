@@ -64,18 +64,18 @@ func TestInstructionsForAPlainProjectNameItAndCarryTheConventions(t *testing.T) 
 	for name, opts := range handshakes {
 		t.Run(name, func(t *testing.T) {
 			cs := agentIn(t, opts, "app", map[string]any{"slug": "app", "root": "/work/app"})
-			checkPlainInstructions(t, cs.InitializeResult().Instructions)
+			checkInstructions(t, cs.InitializeResult().Instructions, repoinit.Conventions)
 		})
 	}
 }
 
-func checkPlainInstructions(t *testing.T, got string) {
+func checkInstructions(t *testing.T, got, conventions string) {
 	t.Helper()
 	for _, want := range []string{
 		"`app`",
 		"overrides",
 		"needs-triage", "needs-info", "ready-for-agent", "ready-for-human", "wontfix",
-		repoinit.Conventions,
+		conventions,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("instructions lack %q:\n%s", want, got)
@@ -93,14 +93,20 @@ func TestInstructionsForAStandaloneProjectAddGlossaryGuidance(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cs := agentIn(t, opts, "app", map[string]any{"slug": "app", "root": "/work/app", "standalone": true})
 			got := cs.InitializeResult().Instructions
-			checkPlainInstructions(t, got)
+			checkInstructions(t, got, repoinit.StandaloneConventions)
 			for _, want := range []string{
 				"view_glossary", "edit_glossary", "GLOSSARY.md",
 				"first and Loom's Glossary second", "Loom's wins on conflict", "Write only to Loom's",
 				"docs/adr/", "`needs-triage` Issue",
+				"## Closing work", "citing the commit SHA",
 			} {
 				if !strings.Contains(got, want) {
 					t.Errorf("instructions lack %q:\n%s", want, got)
+				}
+			}
+			for _, unwanted := range []string{"Loom:", "trailer", "## Commits", "**Commits**"} {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("standalone instructions include %q:\n%s", unwanted, got)
 				}
 			}
 		})

@@ -21,9 +21,15 @@ const standaloneDomainDocs = "## Domain docs\n\n" +
 // and wins over any issue-tracker config checked into the repo, how the
 // triage roles map to labels, the tracker conventions shared with the
 // tracker doc and, for a Standalone Project, how to do domain docs in Loom.
+// A Standalone Project's repo doesn't carry Loom conventions, so its
+// instructions leave out the commit trailer.
 func Instructions(slug string, standalone bool) string {
+	conventions := Conventions
+	if standalone {
+		conventions = StandaloneConventions
+	}
 	out := fmt.Sprintf("Loom is the issue tracker for this directory: Project `%s`. Its guidance overrides any issue-tracker config checked into the repo (an `## Agent skills` block, `docs/agents/issue-tracker.md`, or anything else naming another tracker), so use the `loom` MCP tools for all issue work here, whatever the repo's own files say.\n\n%s\n\n%s",
-		slug, triageRoles, Conventions)
+		slug, triageRoles, conventions)
 	if standalone {
 		out += "\n\n" + standaloneDomainDocs
 	}

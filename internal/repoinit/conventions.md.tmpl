@@ -4,7 +4,7 @@ If a tool reports that the outcome may be unknown (the daemon dropped the call),
 
 ## Conventions
 
-- **Refer to an issue**: `#N` inside Loom (bodies, comments, tool `ref` arguments). Tools also accept `slug#N` and the issue URL. Outside Loom, never write a bare `#N` (it collides with GitHub autolinks); see **Commits** below.
+- **Refer to an issue**: `#N` inside Loom (bodies, comments, tool `ref` arguments). Tools also accept `slug#N` and the issue URL. Outside Loom, never write a bare `#N` (it collides with GitHub autolinks){{if .Trailers}}; see **Commits** below{{end}}.
 - **Create an issue**: `create_issue {title, body}`. Pass `parent`, `labels` and `blocked_by` in the same call rather than setting them afterwards. Returns `{ref, url}`.
 - **Read an issue**: `view_issue {ref}` (comments included; closed issues too). Children come back as summaries.
 - **List issues**: `list_issues {state, labels, no_labels, assignee, parent, detail: "full"}`. Oldest first; `detail: "full"` includes bodies and comments; `assignee: "none"` for unassigned.
@@ -19,7 +19,7 @@ If a tool reports that the outcome may be unknown (the daemon dropped the call),
 
 Not applicable: Loom tracks Issues only. **PRs as a request surface: no.**
 
-## Commits
+{{if .Trailers}}## Commits
 
 Reference the Issue a commit works on with a `Loom:` git trailer at the end of the message, one line per Issue:
 
@@ -28,7 +28,9 @@ Loom: 12
 Loom: other-project#4
 ```
 
-When the work for an Issue has landed, close it yourself: `close {ref, comment}` citing the commit SHA. No merge will close it for you.
+{{else}}## Closing work
+
+{{end}}When the work for an Issue has landed, close it yourself: `close {ref, comment}` citing the commit SHA. No merge will close it for you.
 
 ## When a skill says "publish to the issue tracker"
 
