@@ -19,6 +19,16 @@ type BlockedError struct {
 
 func (e *BlockedError) Error() string { return fmt.Sprintf("#%d is blocked", e.N) }
 
+// OpenChildrenError reports a Claim on an Issue with open children.
+type OpenChildrenError struct {
+	N        int64
+	Children []Issue
+}
+
+func (e *OpenChildrenError) Error() string {
+	return fmt.Sprintf("#%d has %d open children", e.N, len(e.Children))
+}
+
 // AlreadyClaimedError reports a Claim on an Issue another Session holds.
 type AlreadyClaimedError struct {
 	Issue Issue
@@ -34,8 +44,8 @@ func (i Issue) Claimed() bool { return i.Assignee != "" || i.HolderSession != ""
 // ClaimIssue assigns Issue n to a.Name and records a.Session as its holder,
 // atomically. The Session that already holds it gets the Issue back with
 // already set and nothing changes; another holder is an *AlreadyClaimedError.
-// A closed Issue is a *ClosedError and one with an open Blocker a
-// *BlockedError.
+// A closed Issue is a *ClosedError, one with an open Blocker a *BlockedError
+// and one other than a Map with an open child an *OpenChildrenError.
 func (s *Store) ClaimIssue(ctx context.Context, slug string, n int64, a Actor) (i Issue, already bool, err error) {
 	i, err = s.mutate(ctx, slug, n, "claiming", func(tx *sql.Tx, id int64, i Issue) error {
 		if i.Claimed() {
@@ -54,6 +64,13 @@ func (s *Store) ClaimIssue(ctx context.Context, slug string, n int64, a Actor) (
 		}
 		if len(open) > 0 {
 			return &BlockedError{N: n, Blockers: open}
+		}
+		kids, err := openChildrenTx(ctx, tx, id, i.Kind)
+		if err != nil {
+			return err
+		}
+		if len(kids) > 0 {
+			return &OpenChildrenError{N: n, Children: kids}
 		}
 		t := now()
 		if _, err := tx.ExecContext(ctx, `UPDATE issues SET assignee = ?, holder_session = ?, claimed_at = ?, updated_at = ? WHERE id = ?`,
@@ -88,6 +105,29 @@ func openBlockersTx(ctx context.Context, q querier, id int64) ([]Issue, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT `+issueCols+` FROM issue_blockers ib JOIN issues i ON i.id = ib.blocker_id
 		WHERE ib.issue_id = ? AND i.state = ? ORDER BY i.number`, id, StateOpen)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Issue
+	for rows.Next() {
+		_, i, err := scanIssue(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, i)
+	}
+	return out, rows.Err()
+}
+
+// openChildrenTx lists the open children of the Issue of that kind with row
+// id, by number. A Map has none that count: it closes on judgement.
+func openChildrenTx(ctx context.Context, q querier, id int64, kind string) ([]Issue, error) {
+	if kind == KindMap {
+		return nil, nil
+	}
+	rows, err := q.QueryContext(ctx, `
+		SELECT `+issueCols+` FROM issues i WHERE i.parent_id = ? AND i.state = ? ORDER BY i.number`, id, StateOpen)
 	if err != nil {
 		return nil, err
 	}

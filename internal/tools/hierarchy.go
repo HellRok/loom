@@ -69,7 +69,8 @@ func (h *handlers) summary(ctx context.Context, slug string, i store.Issue) (iss
 	return s, nil
 }
 
-// fillRelations adds Issue n's parent, Blockers and children to out.
+// fillRelations adds Issue n's parent, Blockers, children and open children
+// to out.
 func (h *handlers) fillRelations(ctx context.Context, slug string, n int64, out *viewIssueOut) error {
 	parent, err := h.store.Parent(ctx, slug, n)
 	if err != nil {
@@ -97,6 +98,11 @@ func (h *handlers) fillRelations(ctx context.Context, slug string, n int64, out 
 			return err
 		}
 	}
+	open, err := h.store.OpenChildren(ctx, slug, n)
+	if err != nil {
+		return err
+	}
+	out.OpenChildren = refs(open)
 	return nil
 }
 
@@ -107,7 +113,7 @@ type frontierIn struct {
 
 type skippedOut struct {
 	Claimed []string `json:"claimed" jsonschema:"Open, unblocked children somebody holds"`
-	Blocked []string `json:"blocked" jsonschema:"Open children with an open Blocker"`
+	Blocked []string `json:"blocked" jsonschema:"Open children with an open Blocker or an open child of their own"`
 }
 
 type frontierOut struct {

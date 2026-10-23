@@ -637,3 +637,105 @@ func TestSidebarLabelCountsFollowTheView(t *testing.T) {
 		})
 	}
 }
+
+// seedParents builds a Project "loom" on the real hierarchy: ready-for-agent
+// #1 with open child #2, Map #3 with open Ticket #4, and loose #5.
+func seedParents(t *testing.T) *fixture {
+	t.Helper()
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "loom.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if _, err := st.CreateProject(ctx, "loom", "/code/loom"); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []store.NewIssue{
+		{Kind: store.KindIssue, Title: "Parent", Labels: []string{"ready-for-agent"}},
+		{Kind: store.KindIssue, Title: "Child", Parent: 1},
+		{Kind: store.KindMap, Title: "Map"},
+		{Kind: store.KindIssue, Title: "Ticket", Parent: 3, Labels: []string{"wayfinder:task"}},
+		{Kind: store.KindIssue, Title: "Loose"},
+	} {
+		if _, err := st.CreateIssue(ctx, "loom", actor, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mux := http.NewServeMux()
+	web.Register(mux, web.Deps{Store: st, Graph: web.StoreGraph(st)})
+	return &fixture{t: t, st: st, h: mux}
+}
+
+func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
+	f := seedParents(t)
+
+	t.Run("list row", func(t *testing.T) {
+		_, doc := f.get("/loom?view=open", "")
+		row := doc.Find("#row-1")
+		if !row.HasClass("status-blocked") {
+			t.Errorf("#1 should read as blocked: %v", row.AttrOr("class", ""))
+		}
+		if got := text(doc, "#row-1 .waiting"); got != "waiting on 1 open child" {
+			t.Errorf("#1 waiting = %q", got)
+		}
+		expect(t, doc, "#row-2 .waiting", 0)
+		// A Map is never waiting on its Tickets.
+		if doc.Find("#row-3").HasClass("status-blocked") {
+			t.Errorf("a Map isn't blocked by its open children")
+		}
+		expect(t, doc, "#row-3 .waiting", 0)
+	})
+
+	t.Run("issue pane", func(t *testing.T) {
+		_, doc := f.get("/loom/issues/1", "")
+		if got := text(doc, "#issue-pane dd.open-children"); got != "waiting on 1 open child" {
+			t.Errorf("open children = %q", got)
+		}
+		if got := text(doc, "#issue-pane dd.blockers"); got != "none" {
+			t.Errorf("explicit blockers = %q, want none", got)
+		}
+		if got := text(doc, "#issue-pane dd.state"); got != "open · blocked" {
+			t.Errorf("state = %q", got)
+		}
+		_, doc = f.get("/loom/issues/3", "")
+		expect(t, doc, "#issue-pane dd.open-children", 0)
+		_, doc = f.get("/loom/issues/2", "")
+		expect(t, doc, "#issue-pane dd.open-children", 0)
+	})
+
+	t.Run("blocked view stays explicit edges only", func(t *testing.T) {
+		_, doc := f.get("/loom?view=blocked", "")
+		if got := rowNumbers(doc); got != "" {
+			t.Errorf("blocked view lists %q", got)
+		}
+	})
+
+	t.Run("frontier", func(t *testing.T) {
+		_, doc := f.get("/loom?view=frontier", "")
+		if got := rowNumbers(doc); got != "#2 #4 #5" {
+			t.Errorf("frontier lists %q", got)
+		}
+		expect(t, doc, ".not-ready li", 1)
+		if got := text(doc, ".not-ready #row-1 .reason"); got != "waiting on 1 open child" {
+			t.Errorf("#1 reason = %q", got)
+		}
+		if got := text(doc, ".frontier-counts"); got != "3 ready · 0 ready-for-agent · 0 ready-for-human · 3 untagged" {
+			t.Errorf("count line = %q", got)
+		}
+	})
+
+	t.Run("lifts when the last child closes", func(t *testing.T) {
+		if _, _, err := f.st.CloseIssue(context.Background(), "loom", 2, "", true, actor); err != nil {
+			t.Fatal(err)
+		}
+		_, doc := f.get("/loom?view=frontier", "")
+		if got := rowNumbers(doc); got != "#1 #4 #5" {
+			t.Errorf("frontier lists %q", got)
+		}
+		expect(t, doc, ".not-ready", 0)
+		_, doc = f.get("/loom/issues/1", "")
+		expect(t, doc, "#issue-pane dd.open-children", 0)
+		expect(t, doc, "#row-1 .waiting", 0)
+	})
+}

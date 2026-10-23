@@ -12,6 +12,7 @@ const (
 	codeAlreadyClaimed Code = "already_claimed"
 	codeIssueClosed    Code = "issue_closed"
 	codeIssueBlocked   Code = "issue_blocked"
+	codeOpenChildren   Code = "issue_has_open_children"
 )
 
 // claimError codes the store errors a Claim can return.
@@ -28,6 +29,10 @@ func claimError(slug string, n int64, err error) error {
 	if blocked, ok := errors.AsType[*store.BlockedError](err); ok {
 		return fail(codeIssueBlocked, fmt.Sprintf("#%d is blocked by open %v, so it can't be claimed yet.", n, refs(blocked.Blockers)),
 			map[string]any{"open_blockers": refs(blocked.Blockers)})
+	}
+	if open, ok := errors.AsType[*store.OpenChildrenError](err); ok {
+		return fail(codeOpenChildren, fmt.Sprintf("#%d has %d open children %v, so it can't be claimed yet. Take one of them, or wait until they close.", n, len(open.Children), refs(open.Children)),
+			map[string]any{"open_children": refs(open.Children)})
 	}
 	return issueError(slug, n, err)
 }

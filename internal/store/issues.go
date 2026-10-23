@@ -124,7 +124,10 @@ type IssueFilter struct {
 	Parent int64
 	// Blocked selects Issues with (true) or without (false) an open Blocker.
 	Blocked *bool
-	Limit   int
+	// NoOpenChildren excludes the Issues other than Maps that have an open
+	// child.
+	NoOpenChildren bool
+	Limit          int
 }
 
 // NewIssue is what CreateIssue makes an Issue from.
@@ -389,6 +392,9 @@ func (s *Store) Issues(ctx context.Context, slug string, f IssueFilter) ([]Issue
 		}
 		where = append(where, not+`EXISTS (SELECT 1 FROM issue_blockers ib JOIN issues b ON b.id = ib.blocker_id
 			WHERE ib.issue_id = i.id AND b.state = 'open')`)
+	}
+	if f.NoOpenChildren {
+		where = append(where, `(i.kind = 'map' OR NOT EXISTS (SELECT 1 FROM issues c WHERE c.parent_id = i.id AND c.state = 'open'))`)
 	}
 	from := ` FROM issues i JOIN projects p ON p.id = i.project_id WHERE ` + strings.Join(where, " AND ")
 

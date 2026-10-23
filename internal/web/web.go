@@ -56,6 +56,29 @@ func (r Relations) blocked() bool {
 	return false
 }
 
+// openChildren counts the Issue's children that aren't closed. An Issue other
+// than a Map that has any is waiting on them, as if blocked.
+func (r Relations) openChildren(i store.Issue) int {
+	if i.Kind == store.KindMap {
+		return 0
+	}
+	n := 0
+	for _, c := range r.Children {
+		if !c.Closed {
+			n++
+		}
+	}
+	return n
+}
+
+// waitingText says how many open children an Issue is waiting on.
+func waitingText(n int) string {
+	if n == 1 {
+		return "waiting on 1 open child"
+	}
+	return "waiting on " + strconv.Itoa(n) + " open children"
+}
+
 // Graph supplies the hierarchy and blocking the pages show. It is optional:
 // without one, every Issue is parentless, unblocked and childless.
 type Graph interface {
@@ -304,7 +327,7 @@ var (
 
 // frontierFilter is the Frontier of a Project: open, unblocked, unclaimed
 // Issues other than its Maps. It matches Store.Frontier's ready sort.
-var frontierFilter = store.IssueFilter{State: store.StateOpen, NotKind: store.KindMap, Blocked: &no, Claimed: &no}
+var frontierFilter = store.IssueFilter{State: store.StateOpen, NotKind: store.KindMap, Blocked: &no, Claimed: &no, NoOpenChildren: true}
 
 // A saved view is a named filter; the first is the default.
 var views = []struct {
@@ -490,16 +513,26 @@ type switcherItem struct {
 
 type row struct {
 	store.Issue
-	Parent   *Ref
-	Blocked  bool
-	Labels   []store.Label
-	URL      string
-	Selected bool
-	Holder   *HolderView // the claiming Session, if any
+	Parent  *Ref
+	Blocked bool
+	// OpenChildren counts the children it is waiting on, unless it is a Map.
+	OpenChildren int
+	Labels       []store.Label
+	URL          string
+	Selected     bool
+	Holder       *HolderView // the claiming Session, if any
 }
 
 // Status is the Issue's status: closed, blocked, claimed or open.
 func (r row) Status() string { return status(r.Issue, r.Blocked) }
+
+// Waiting says what the row is waiting on, if it has open children.
+func (r row) Waiting() string {
+	if r.OpenChildren == 0 {
+		return ""
+	}
+	return waitingText(r.OpenChildren)
+}
 
 // Glyph is the symbol shown for Status.
 func (r row) Glyph() string { return glyphs[r.Status()] }
@@ -518,6 +551,14 @@ func status(i store.Issue, blocked bool) string {
 	return "open"
 }
 
+// Waiting says what the Issue is waiting on, if it has open children.
+func (v issueView) Waiting() string {
+	if v.OpenChildren == 0 {
+		return ""
+	}
+	return waitingText(v.OpenChildren)
+}
+
 // issueView is the Issue pane's data.
 type issueView struct {
 	store.Issue
@@ -528,17 +569,19 @@ type issueView struct {
 	Blocks   []refLink
 	Children []refLink
 	Blocked  bool
-	Body     template.HTML
-	Comments []commentView
-	Status   string
-	Query    string
-	Holder   *HolderView // the claiming Session, if any
-	Tab      string      // overview, history, and for a Map board and decided
-	Tabs     []tabLink
-	Self     string // this pane's own URL, tab included
-	Board    board
-	Decided  []decision
-	History  []eventView
+	// OpenChildren counts the children it is waiting on, unless it is a Map.
+	OpenChildren int
+	Body         template.HTML
+	Comments     []commentView
+	Status       string
+	Query        string
+	Holder       *HolderView // the claiming Session, if any
+	Tab          string      // overview, history, and for a Map board and decided
+	Tabs         []tabLink
+	Self         string // this pane's own URL, tab included
+	Board        board
+	Decided      []decision
+	History      []eventView
 }
 
 // refLink is a Ref with the URL of its Issue page, keeping the list filters.
@@ -663,7 +706,8 @@ func (s *server) listRow(ctx context.Context, slug string, i store.Issue, f filt
 	if err != nil {
 		return row{}, err
 	}
-	rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked(),
+	open := rel.openChildren(i)
+	rw := row{Issue: i, Parent: rel.Parent, Blocked: rel.blocked() || open > 0, OpenChildren: open,
 		URL: "/" + slug + "/issues/" + strconv.FormatInt(i.Number, 10) + f.query(), Selected: i.Number == selected,
 		Holder: hs.view(i.HolderSession)}
 	for _, name := range byIssue[i.Number] {
@@ -704,7 +748,7 @@ func (s *server) frontierView(ctx context.Context, slug string, f filters, selec
 	fv.Counts = append(fv.Counts, countPart{Text: strconv.Itoa(n) + " untagged", URL: "/" + slug + untagged.query()})
 
 	tagged := f.issueFilter()
-	tagged.Blocked, tagged.Claimed = nil, nil
+	tagged.Blocked, tagged.Claimed, tagged.NoOpenChildren = nil, nil, false
 	tagged.Labels = append([]string{readyForAgent}, withoutLabel(tagged.Labels, readyForAgent)...)
 	cands, _, err := s.Store.Issues(ctx, slug, tagged)
 	if err != nil {
@@ -718,14 +762,14 @@ func (s *server) frontierView(ctx context.Context, slug string, f filters, selec
 		if err != nil {
 			return fv, err
 		}
-		if len(open) == 0 && !i.Claimed() {
-			continue
-		}
 		rw, err := s.listRow(ctx, slug, i, f, selected, colours, byIssue, hs)
 		if err != nil {
 			return fv, err
 		}
-		rw.Blocked = len(open) > 0
+		if len(open) == 0 && rw.OpenChildren == 0 && !i.Claimed() {
+			continue
+		}
+		rw.Blocked = len(open) > 0 || rw.OpenChildren > 0
 		nr := notReady{row: rw}
 		for _, b := range open {
 			nr.Blockers = append(nr.Blockers, b.Number)
@@ -762,7 +806,8 @@ func (s *server) issueView(ctx context.Context, slug string, n int64, f filters,
 	if err != nil {
 		return issueView{}, err
 	}
-	iv := issueView{Issue: i, Slug: slug, Blocked: rel.blocked(), Body: renderMarkdown(slug, i.Body), Query: f.query()}
+	open := rel.openChildren(i)
+	iv := issueView{Issue: i, Slug: slug, Blocked: rel.blocked() || open > 0, OpenChildren: open, Body: renderMarkdown(slug, i.Body), Query: f.query()}
 	link := func(r Ref) refLink {
 		return refLink{Ref: r, URL: "/" + slug + "/issues/" + strconv.FormatInt(r.Number, 10) + iv.Query}
 	}

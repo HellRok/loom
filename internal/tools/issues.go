@@ -183,9 +183,12 @@ type viewIssueOut struct {
 	BlockedBy     []issueLink `json:"blocked_by" jsonschema:"Every Blocker, open or closed"`
 	// Children are summaries, without bodies.
 	Children []issueSummary `json:"children"`
-	Body     string         `json:"body"`
-	Comments *[]commentOut  `json:"comments,omitempty"`
-	Events   *[]eventOut    `json:"events,omitempty"`
+	// OpenChildren are the children not yet closed. Unless the Issue is a Map,
+	// it can't be claimed while there are any, though they aren't Blockers.
+	OpenChildren []string      `json:"open_children" jsonschema:"Children not yet closed; while there are any, an Issue other than a Map can't be claimed"`
+	Body         string        `json:"body"`
+	Comments     *[]commentOut `json:"comments,omitempty"`
+	Events       *[]eventOut   `json:"events,omitempty"`
 }
 
 func (h *handlers) viewIssue(ctx context.Context, c call, in viewIssueIn) (viewIssueOut, error) {

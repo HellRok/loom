@@ -52,6 +52,10 @@ _Avoid_: Activity, audit entry
 An Issue that must be closed before another Issue it blocks can be taken.
 _Avoid_: Dependency, prerequisite
 
+**Open child**:
+A child Issue that isn't closed yet (closing as won't-fix counts as closed). While an Issue other than a Map has one, it can't be taken, as if blocked, but no Blocker is recorded: the block lifts by itself when the last child closes.
+_Avoid_: Sub-issue, implicit blocker
+
 **Frontier**:
 The open, unblocked, unclaimed Issues among a set, in creation order: either the children of an Issue, or a whole Project's Issues other than its Maps. Whether an Issue is tagged `ready-for-agent` plays no part; a tag is a claim about readiness, the Frontier is the fact.
 _Avoid_: Ready queue, backlog

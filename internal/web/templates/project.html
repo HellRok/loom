@@ -42,6 +42,7 @@
         {{if .Parent}}<span class="parent" title="{{.Parent.Title}}">↑#{{.Parent.Number}}</span>{{end}}
         <span class="glyph" title="{{.Status}}">{{.Glyph}}</span>
         <span class="title">{{.Title}}</span>
+        {{with .Waiting}}<span class="waiting">{{.}}</span>{{end}}
         {{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span>{{end}}
         <time class="updated" datetime="{{iso .UpdatedAt}}">{{ago .UpdatedAt}}</time>
       </a>
@@ -56,7 +57,7 @@
       <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true">
         <span class="num">#{{.Number}}</span>
         <span class="title">{{.Title}}</span>
-        <span class="reason">{{if .Blockers}}blocked by {{range $i, $b := .Blockers}}{{if $i}}, {{end}}#{{$b}}{{end}}{{else if .Holder}}held by {{.Holder.Short}}{{else}}claimed{{end}}</span>
+        <span class="reason">{{if .Blockers}}blocked by {{range $i, $b := .Blockers}}{{if $i}}, {{end}}#{{$b}}{{end}}{{else if .Waiting}}{{.Waiting}}{{else if .Holder}}held by {{.Holder.Short}}{{else}}claimed{{end}}</span>
       </a>
     </li>
     {{end}}
@@ -77,7 +78,8 @@
     <dt>Labels</dt><dd class="issue-labels">{{range .Labels}}<span class="label label-{{.Colour}}">{{.Name}}</span> {{else}}none{{end}}</dd>
     <dt>Parent</dt><dd class="parent">{{with .Parent}}{{template "ref" .}}{{else}}none{{end}}</dd>
     <dt>Blocked by</dt><dd class="blockers">{{range .Blockers}}{{template "ref" .}} {{else}}none{{end}}</dd>
-    <dt>Blocks</dt><dd class="blocks">{{range .Blocks}}{{template "ref" .}} {{else}}none{{end}}</dd>
+    {{with .Waiting}}<dt>Waiting on</dt><dd class="open-children">{{.}}</dd>
+    {{end}}<dt>Blocks</dt><dd class="blocks">{{range .Blocks}}{{template "ref" .}} {{else}}none{{end}}</dd>
     <dt>Children</dt><dd class="children">{{range .Children}}{{template "ref" .}} {{else}}none{{end}}</dd>
     <dt>Version</dt><dd class="version">{{.Version}}</dd>
   </dl>

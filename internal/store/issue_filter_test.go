@@ -99,3 +99,31 @@ func TestIssueFilterNotLabels(t *testing.T) {
 		t.Errorf("without the ready labels = %v, want %v", numbers(got), want)
 	}
 }
+
+func TestIssueFilterNoOpenChildren(t *testing.T) {
+	ctx := context.Background()
+	st := filterFixture(t)
+	if _, err := st.CreateIssue(ctx, "app", filterActor, store.NewIssue{Kind: store.KindIssue, Title: "child", Parent: 2}); err != nil {
+		t.Fatal(err)
+	}
+	f := store.IssueFilter{State: store.StateOpen, NoOpenChildren: true}
+	got, _, err := st.Issues(ctx, "app", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// #2 waits on #8; Map #1 is exempt from its open Ticket #6.
+	if want := []int64{1, 3, 4, 6, 7, 8}; !reflect.DeepEqual(numbers(got), want) {
+		t.Errorf("open without open children = %v, want %v", numbers(got), want)
+	}
+
+	if _, _, err := st.CloseIssue(ctx, "app", 8, "", true, filterActor); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err = st.Issues(ctx, "app", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{1, 2, 3, 4, 6, 7}; !reflect.DeepEqual(numbers(got), want) {
+		t.Errorf("after the child closes = %v, want %v", numbers(got), want)
+	}
+}

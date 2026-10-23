@@ -116,4 +116,5 @@ progress { width: 10rem; vertical-align: middle; }
 .frontier-counts { margin: 0.4rem 0 0; font-size: 0.9em; }
 .not-ready-heading { font-size: 0.85rem; color: var(--muted); margin: 1rem 0 0.25rem; }
 .not-ready { list-style: none; margin: 0; padding: 0; opacity: 0.65; }
+.row .waiting { color: var(--muted); font-size: 0.8em; margin-left: 0.4em; }
 .not-ready .reason { display: block; color: var(--muted); font-size: 0.8em; }
