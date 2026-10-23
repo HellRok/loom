@@ -102,3 +102,42 @@ func TestPanesScrollIndependently(t *testing.T) {
 		}
 	}
 }
+
+func TestNavigationKeepsItsScrollWhenFollowingLinks(t *testing.T) {
+	l := Start(t, "demo")
+	for i := range 40 {
+		l.Call("create_label", map[string]any{"name": fmt.Sprintf("label-%02d", i)})
+	}
+	l.Call("create_issue", map[string]any{"title": "An Issue"})
+
+	l.Do(chromedp.EmulateViewport(1280, 720))
+	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
+	scrolled := scrollBy(l, "#nav", 10000)
+	if scrolled == 0 {
+		t.Fatal("#nav doesn't scroll")
+	}
+
+	// A label link far down the sidebar.
+	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .labels li:last-child a").click()`))
+	Get(l, chromedp.Poll[string](`location.search.includes("label=") && "ok"`,
+		chromedp.WithPollingTimeout(5*time.Second)))
+	if got := scrollPosition(l, "#nav"); got != scrolled {
+		t.Errorf("#nav after following a label link: scrolled to %v, want %v", got, scrolled)
+	}
+
+	// The filter form, once htmx has settled the swap and bound the new form.
+	Get(l, chromedp.Poll[string](`!document.querySelector(".htmx-request, .htmx-swapping, .htmx-settling") && "ok"`,
+		chromedp.WithPollingTimeout(5*time.Second)))
+	Get(l, chromedp.Evaluate[any](`(() => {
+		const form = document.querySelector("#list-pane form.filter");
+		form.q.value = "Issue";
+		form.requestSubmit();
+	})()`))
+	Get(l, chromedp.Poll[string](`location.search.includes("q=Issue") && "ok"`,
+		chromedp.WithPollingTimeout(5*time.Second)))
+	// Give a full page load time to replace the pane, then check it didn't.
+	time.Sleep(300 * time.Millisecond)
+	if got := scrollPosition(l, "#nav"); got != scrolled {
+		t.Errorf("#nav after filtering: scrolled to %v, want %v", got, scrolled)
+	}
+}
