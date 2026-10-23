@@ -43,3 +43,56 @@ func TestSidebarLabelCountsUpdateLive(t *testing.T) {
 		t.Fatalf("bug count after closing: got %q, want 0", got)
 	}
 }
+
+// viewCount is a JavaScript expression for the count beside the nth (1-based)
+// View in the sidebar.
+func viewCount(n int) string {
+	return fmt.Sprintf(`document.querySelector("#nav .views li:nth-child(%d) .count")?.textContent`, n)
+}
+
+func TestSelectedLabelNarrowsTheViewCountsAndSurvivesSwitchingView(t *testing.T) {
+	const open, closed = 3, 7 // positions of the Open and Closed Views
+	l := Start(t, "demo")
+	l.Call("create_label", map[string]any{"name": "bug"})
+	l.Call("create_issue", map[string]any{"title": "Bug one", "labels": []string{"bug"}})
+	l.Call("create_issue", map[string]any{"title": "Bug two", "labels": []string{"bug"}})
+	l.Call("create_issue", map[string]any{"title": "Plain"})
+
+	poll := func(expr string) {
+		t.Helper()
+		Get(l, chromedp.Poll[string](`(`+expr+`) && "ok"`, chromedp.WithPollingTimeout(5*time.Second)))
+	}
+	eq := func(expr, want string) string { return fmt.Sprintf(`%s === %q`, expr, want) }
+
+	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
+	poll(eq(viewCount(open), "3"))
+
+	// Selecting the label narrows the View counts and leaves its own alone.
+	poll(eq(labelCount("bug"), "2"))
+	Get(l, chromedp.Evaluate[any](`[...document.querySelectorAll("#nav .labels li a")]
+		.find(a => a.textContent.trim() === "bug").click()`))
+	poll(`location.search.includes("label=bug")`)
+	poll(eq(viewCount(open), "2"))
+	poll(eq(labelCount("bug"), "2"))
+
+	// A live update moves the counts with the label still selected.
+	l.Call("close", map[string]any{"ref": "#1"})
+	poll(eq(viewCount(open), "1"))
+	poll(eq(viewCount(closed), "1"))
+	poll(eq(labelCount("bug"), "1"))
+
+	// Following a View keeps the label selected.
+	Get(l, chromedp.Evaluate[any](fmt.Sprintf(`document.querySelector("#nav .views li:nth-child(%d) a").click()`, closed)))
+	poll(`location.search.includes("view=closed") && location.search.includes("label=bug")`)
+	poll(`document.querySelector("#nav .labels li.active") && document.querySelector("#row-1")`)
+	poll(eq(labelCount("bug"), "1"))
+	poll(eq(viewCount(open), "1"))
+	poll(eq(viewCount(closed), "1"))
+
+	// And the counts keep following live updates there.
+	l.Call("close", map[string]any{"ref": "#2"})
+	poll(eq(viewCount(open), "0"))
+	poll(eq(viewCount(closed), "2"))
+	poll(eq(labelCount("bug"), "2"))
+	poll(`location.search.includes("label=bug")`)
+}

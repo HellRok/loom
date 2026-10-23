@@ -443,11 +443,10 @@ type labelLink struct {
 }
 
 // labelLinks is the sidebar's Labels. Each Count is the number of rows the
-// list would show after clicking the Label: those of rows, the list as
-// filtered, carrying an inactive Label, and the whole list without an active
-// one, which a click removes. Every Label is listed, so the sidebar doesn't
-// jump between views.
-func (s *server) labelLinks(ctx context.Context, slug string, f filters, labels []store.Label, rows []row) ([]labelLink, error) {
+// list shows that carry the Label, selected or not, so selecting a Label
+// leaves its own count as it was. Every Label is listed, so the sidebar
+// doesn't jump between views.
+func labelLinks(slug string, f filters, labels []store.Label, rows []row) []labelLink {
 	counts := map[string]int{}
 	for _, rw := range rows {
 		for _, l := range rw.Labels {
@@ -456,22 +455,10 @@ func (s *server) labelLinks(ctx context.Context, slug string, f filters, labels 
 	}
 	var ll []labelLink
 	for _, l := range labels {
-		n := counts[l.Name]
-		if f.hasLabel(l.Name) {
-			issues, _, err := s.Store.Issues(ctx, slug, f.withLabel(l.Name).issueFilter())
-			if err != nil {
-				return nil, err
-			}
-			n = 0
-			for _, i := range issues {
-				if f.matchesQ(i) {
-					n++
-				}
-			}
-		}
-		ll = append(ll, labelLink{Label: l, Count: n, Zero: n == 0 && !f.hasLabel(l.Name), URL: "/" + slug + f.withLabel(l.Name).query(), Active: f.hasLabel(l.Name)})
+		n, active := counts[l.Name], f.hasLabel(l.Name)
+		ll = append(ll, labelLink{Label: l, Count: n, Zero: n == 0 && !active, URL: "/" + slug + f.withLabel(l.Name).query(), Active: active})
 	}
-	return ll, nil
+	return ll
 }
 
 // countPart is one piece of the Frontier's count line.
@@ -646,8 +633,8 @@ func (s *server) projectData(ctx context.Context, slug string, proj store.Projec
 
 	var vl []viewLink
 	for _, v := range views {
-		g := filters{View: v.Key, Q: f.Q}
-		_, n, err := s.Store.Issues(ctx, slug, withLimit(v.Filter, 1))
+		g := f.withView(v.Key)
+		n, err := s.viewCount(ctx, slug, g)
 		if err != nil {
 			return nil, projectLists{}, err
 		}
@@ -688,12 +675,30 @@ func (s *server) projectData(ctx context.Context, slug string, proj store.Projec
 		rows = append(rows, rw)
 	}
 	data["Rows"] = rows
-	if data["LabelLinks"], err = s.labelLinks(ctx, slug, f, labels, rows); err != nil {
-		return nil, projectLists{}, err
-	}
+	data["LabelLinks"] = labelLinks(slug, f, labels, rows)
 	data["Clear"] = "/" + slug
 
 	return data, projectLists{colours, byIssue, hs}, nil
+}
+
+// viewCount is the number of rows the list would show under f: its View
+// narrowed by the Labels, untagged and title filters.
+func (s *server) viewCount(ctx context.Context, slug string, f filters) (int, error) {
+	if f.Q == "" {
+		_, n, err := s.Store.Issues(ctx, slug, withLimit(f.issueFilter(), 1))
+		return n, err
+	}
+	issues, _, err := s.Store.Issues(ctx, slug, f.issueFilter())
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, i := range issues {
+		if f.matchesQ(i) {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (f filters) matchesQ(i store.Issue) bool {

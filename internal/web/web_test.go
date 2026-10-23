@@ -609,8 +609,16 @@ func TestSidebarLabelCountsFollowTheView(t *testing.T) {
 		{"Frontier", "view=frontier", map[string]string{
 			"ready-for-agent": "1", "ready-for-human": "1", "bug": "1", "needs-triage": "0!", "wayfinder:task": "0!"}},
 		{"Frontier narrowed by an active label", "view=frontier&label=ready-for-agent", map[string]string{
-			// Clicking the active label drops it, leaving the whole Frontier.
-			"ready-for-agent": "3", "ready-for-human": "0!", "bug": "1", "needs-triage": "0!"}},
+			// Selecting a label doesn't change its own count: 1, as unselected above.
+			"ready-for-agent": "1", "ready-for-human": "0!", "bug": "1", "needs-triage": "0!"}},
+		{"Open narrowed by a label, which keeps its count", "view=open&label=bug", map[string]string{
+			"bug": "1", "ready-for-agent": "1", "ready-for-human": "0!", "needs-triage": "0!"}},
+		{"Open narrowed by two labels", "view=open&label=bug&label=ready-for-agent", map[string]string{
+			"bug": "1", "ready-for-agent": "1", "ready-for-human": "0!", "needs-triage": "0!"}},
+		{"Open narrowed by labels no Issue carries together", "view=open&label=bug&label=needs-triage", map[string]string{
+			"bug": "0", "needs-triage": "0", "ready-for-agent": "0!"}},
+		{"Maps narrowed by a label none of them carry", "view=maps&label=bug", map[string]string{
+			"bug": "0", "ready-for-agent": "0!"}},
 		{"Closed", "view=closed", map[string]string{
 			"bug": "1", "ready-for-agent": "0!", "needs-triage": "0!"}},
 		{"Open", "view=open", map[string]string{
@@ -759,4 +767,53 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 		expect(t, doc, "#issue-pane dd.open-children", 0)
 		expect(t, doc, "#row-1 .row-waiting", 0)
 	})
+}
+
+// viewLinks are the sidebar's View links, in order.
+func viewLinks(doc *goquery.Document) string {
+	var hrefs []string
+	doc.Find("#nav .views li a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
+	return strings.Join(hrefs, " ")
+}
+
+func TestSidebarViewLinksKeepTheFilters(t *testing.T) {
+	f := seed(t)
+	for _, c := range []struct{ name, query, want string }{
+		{"a label", "label=bug", "/loom?label=bug /loom?label=bug&view=frontier /loom?label=bug&view=open /loom?label=bug&view=in-progress /loom?label=bug&view=blocked /loom?label=bug&view=needs-triage /loom?label=bug&view=closed"},
+		{"labels, untagged and a title filter", "view=open&label=bug&label=wayfinder:task&untagged=1&q=fix", "/loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1 /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=frontier /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=open /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=in-progress /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=blocked /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=needs-triage /loom?label=bug&label=wayfinder%3Atask&q=fix&untagged=1&view=closed"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, doc := f.get("/loom?"+c.query, "")
+			if got := viewLinks(doc); got != c.want {
+				t.Errorf("view links = %s\nwant %s", got, c.want)
+			}
+		})
+	}
+}
+
+// viewCounts are the sidebar's View counts, in order.
+func viewCounts(doc *goquery.Document) string {
+	var ns []string
+	doc.Find("#nav .views li .count").Each(func(_ int, s *goquery.Selection) { ns = append(ns, s.Text()) })
+	return strings.Join(ns, " ")
+}
+
+func TestSidebarViewCountsFollowTheFilters(t *testing.T) {
+	f := seed(t)
+	// Maps, Frontier, Open, In progress, Blocked, Needs triage, Closed.
+	for _, c := range []struct{ name, query, want string }{
+		{"no filters", "", "1 1 3 0 1 1 1"},
+		{"a label", "label=bug", "0 1 1 0 0 0 0"},
+		{"a label, from another view", "view=closed&label=bug", "0 1 1 0 0 0 0"},
+		{"a title filter", "q=web", "0 0 1 0 1 1 0"},
+		{"untagged", "untagged=1", "1 0 2 0 1 1 1"},
+		{"a label and a title filter", "label=bug&q=web", "0 0 0 0 0 0 0"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, doc := f.get("/loom?"+c.query, "")
+			if got := viewCounts(doc); got != c.want {
+				t.Errorf("view counts = %s, want %s", got, c.want)
+			}
+		})
+	}
 }

@@ -29,6 +29,8 @@ func (s *server) glossaryPage(w http.ResponseWriter, r *http.Request, slug strin
 		s.fail(w, r, err)
 		return
 	}
+	// No list is shown, so the navigation counts and links are the default
+	// View's, as a link out of the Glossary leads to it.
 	data, _, err := s.projectData(r.Context(), slug, p, parseFilters(nil), 0)
 	if err != nil {
 		s.fail(w, r, err)
