@@ -141,3 +141,37 @@ func TestNavigationKeepsItsScrollWhenFollowingLinks(t *testing.T) {
 		t.Errorf("#nav after filtering: scrolled to %v, want %v", got, scrolled)
 	}
 }
+
+func TestSelectingARowKeepsTheListAndNavigationScroll(t *testing.T) {
+	l := Start(t, "demo")
+	for i := range 40 {
+		l.Call("create_label", map[string]any{"name": fmt.Sprintf("label-%02d", i)})
+	}
+	for i := 1; i <= 60; i++ {
+		l.Call("create_issue", map[string]any{"title": fmt.Sprintf("Issue %d", i)})
+	}
+
+	l.Do(chromedp.EmulateViewport(1280, 720))
+	l.Do(chromedp.Navigate(l.URL("/demo/issues/1?view=open")))
+	listScrolled := scrollBy(l, "#list-pane", 10000)
+	navScrolled := scrollBy(l, "#nav", 10000)
+	if listScrolled == 0 || navScrolled == 0 {
+		t.Fatalf("the panes don't scroll: list %v, nav %v", listScrolled, navScrolled)
+	}
+
+	// A row far down the list, followed without scrolling it into view.
+	Get(l, chromedp.Evaluate[any](`document.querySelector("#row-5 .row-link").click()`))
+	Get(l, chromedp.Poll[string](`document.querySelector("#row-5.selected") && "ok"`,
+		chromedp.WithPollingTimeout(5*time.Second)))
+	Get(l, chromedp.Poll[string](`!document.querySelector(".htmx-request, .htmx-swapping, .htmx-settling") && "ok"`,
+		chromedp.WithPollingTimeout(5*time.Second)))
+	if got := Get(l, chromedp.Evaluate[float64](`document.querySelectorAll("#list-pane").length`)); got != 1 {
+		t.Errorf("%v list panes after selecting a row, want 1", got)
+	}
+	if got := scrollPosition(l, "#list-pane"); got != listScrolled {
+		t.Errorf("#list-pane after selecting a row: scrolled to %v, want %v", got, listScrolled)
+	}
+	if got := scrollPosition(l, "#nav"); got != navScrolled {
+		t.Errorf("#nav after selecting a row: scrolled to %v, want %v", got, navScrolled)
+	}
+}
