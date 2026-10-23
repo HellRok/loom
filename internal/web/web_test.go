@@ -189,7 +189,7 @@ func TestProjectPage(t *testing.T) {
 			t.Errorf("views = %s", got)
 		}
 		// Labels with counts.
-		if got := text(doc, ".labels li:has(.label-yellow:contains('needs-triage'))"); got != "needs-triage 1" {
+		if got := text(doc, ".labels li:has(.label-yellow:contains('needs-triage'))"); got != "needs-triage 0" {
 			t.Errorf("needs-triage label = %q", got)
 		}
 		// Maps is the default view.
@@ -580,4 +580,60 @@ func TestFrontierView(t *testing.T) {
 		expect(t, doc, ".not-ready", 0)
 		expect(t, doc, ".frontier-counts", 1)
 	})
+}
+
+// labelCounts is the sidebar's label counts by name, those muted as having
+// none marked with a trailing "!".
+func labelCounts(doc *goquery.Document) map[string]string {
+	out := map[string]string{}
+	doc.Find(".labels li").Each(func(_ int, s *goquery.Selection) {
+		name := strings.TrimSpace(s.Find(".label").Text())
+		n := strings.TrimSpace(s.Find(".count").Text())
+		if s.HasClass("zero") {
+			n += "!"
+		}
+		out[name] = n
+	})
+	return out
+}
+
+func TestSidebarLabelCountsFollowTheView(t *testing.T) {
+	f := seedFrontier(t)
+	if _, err := f.st.SetLabels(context.Background(), "loom", 4, []string{"bug"}, nil, actor); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, query string
+		want        map[string]string
+	}{
+		{"Frontier", "view=frontier", map[string]string{
+			"ready-for-agent": "1", "ready-for-human": "1", "bug": "1", "needs-triage": "0!", "wayfinder:task": "0!"}},
+		{"Frontier narrowed by an active label", "view=frontier&label=ready-for-agent", map[string]string{
+			// Clicking the active label drops it, leaving the whole Frontier.
+			"ready-for-agent": "3", "ready-for-human": "0!", "bug": "1", "needs-triage": "0!"}},
+		{"Closed", "view=closed", map[string]string{
+			"bug": "1", "ready-for-agent": "0!", "needs-triage": "0!"}},
+		{"Open", "view=open", map[string]string{
+			"ready-for-agent": "3", "ready-for-human": "1", "bug": "1", "needs-triage": "1"}},
+		{"Open narrowed by a title filter", "view=open&q=held", map[string]string{
+			"ready-for-agent": "1", "ready-for-human": "0!", "bug": "0!"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, doc := f.get("/loom?"+c.query, "")
+			got := labelCounts(doc)
+			for name, want := range c.want {
+				if got[name] != want {
+					t.Errorf("%s = %q, want %q", name, got[name], want)
+				}
+			}
+			// Every label stays listed whatever its count.
+			defined, err := f.st.Labels(context.Background(), "loom")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(defined) {
+				t.Errorf("listed %d labels, want all %d defined", len(got), len(defined))
+			}
+		})
+	}
 }

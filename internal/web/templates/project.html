@@ -19,7 +19,7 @@
   </ul>
   {{end}}  <h2>Labels</h2>
   <ul class="labels">
-    {{range .LabelLinks}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="label label-{{.Colour}}">{{.Name}}</span></a> <span class="count">{{.Count}}</span></li>{{end}}
+    {{range .LabelLinks}}<li{{if or .Active .Zero}} class="{{if .Active}}active{{end}}{{if and .Active .Zero}} {{end}}{{if .Zero}}zero{{end}}"{{end}}{{if .Active}} aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="label label-{{.Colour}}">{{.Name}}</span></a> <span class="count">{{.Count}}</span></li>{{end}}
   </ul>
 </nav>{{end}}
 

@@ -424,8 +424,43 @@ type viewLink struct {
 
 type labelLink struct {
 	store.Label
+	// Count shadows Label.Count, the Project-wide figure.
+	Count  int
 	URL    string
 	Active bool
+	Zero   bool
+}
+
+// labelLinks is the sidebar's Labels. Each Count is the number of rows the
+// list would show after clicking the Label: those of rows, the list as
+// filtered, carrying an inactive Label, and the whole list without an active
+// one, which a click removes. Every Label is listed, so the sidebar doesn't
+// jump between views.
+func (s *server) labelLinks(ctx context.Context, slug string, f filters, labels []store.Label, rows []row) ([]labelLink, error) {
+	counts := map[string]int{}
+	for _, rw := range rows {
+		for _, l := range rw.Labels {
+			counts[l.Name]++
+		}
+	}
+	var ll []labelLink
+	for _, l := range labels {
+		n := counts[l.Name]
+		if f.hasLabel(l.Name) {
+			issues, _, err := s.Store.Issues(ctx, slug, f.withLabel(l.Name).issueFilter())
+			if err != nil {
+				return nil, err
+			}
+			n = 0
+			for _, i := range issues {
+				if f.matchesQ(i) {
+					n++
+				}
+			}
+		}
+		ll = append(ll, labelLink{Label: l, Count: n, Zero: n == 0 && !f.hasLabel(l.Name), URL: "/" + slug + f.withLabel(l.Name).query(), Active: f.hasLabel(l.Name)})
+	}
+	return ll, nil
 }
 
 // countPart is one piece of the Frontier's count line.
@@ -559,12 +594,9 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 		return
 	}
 	colours := map[string]store.Label{}
-	var ll []labelLink
 	for _, l := range labels {
 		colours[l.Name] = l
-		ll = append(ll, labelLink{Label: l, URL: "/" + slug + f.withLabel(l.Name).query(), Active: f.hasLabel(l.Name)})
 	}
-	data["LabelLinks"] = ll
 
 	issues, _, err := s.Store.Issues(ctx, slug, f.issueFilter())
 	if err != nil {
@@ -594,6 +626,10 @@ func (s *server) projectPage(w http.ResponseWriter, r *http.Request, slug string
 		rows = append(rows, rw)
 	}
 	data["Rows"] = rows
+	if data["LabelLinks"], err = s.labelLinks(ctx, slug, f, labels, rows); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	data["Clear"] = "/" + slug
 
 	if f.View == viewFrontier {

@@ -23,7 +23,7 @@ func TestSidebarLabelCountsUpdateLive(t *testing.T) {
 	l.Call("create_label", map[string]any{"name": "bug"})
 	l.Call("create_issue", map[string]any{"title": "Fix the login page"})
 
-	l.Do(chromedp.Navigate(l.URL("/demo")))
+	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
 	if got := Get(l, chromedp.Evaluate[string](labelCount("bug"))); got != "0" {
 		t.Fatalf("bug count before labelling: got %q, want 0", got)
 	}
@@ -33,5 +33,13 @@ func TestSidebarLabelCountsUpdateLive(t *testing.T) {
 		chromedp.WithPollingTimeout(5*time.Second)))
 	if got != "1" {
 		t.Fatalf("bug count after labelling: got %q, want 1", got)
+	}
+
+	// Closing the Issue moves it out of the Open view the counts follow.
+	l.Call("close", map[string]any{"ref": "#1"})
+	got = Get(l, chromedp.Poll[string](labelCount("bug")+` === "0" && "0"`,
+		chromedp.WithPollingTimeout(5*time.Second)))
+	if got != "0" {
+		t.Fatalf("bug count after closing: got %q, want 0", got)
 	}
 }

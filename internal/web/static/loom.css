@@ -33,6 +33,7 @@ progress { width: 10rem; vertical-align: middle; }
 .nav li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.1rem 0.25rem; border-radius: 4px; }
 .nav li.active { background: var(--line); font-weight: 600; }
 .count { color: var(--muted); font-size: 0.85em; }
+.nav li.zero { opacity: 0.5; }
 
 .filter { display: flex; gap: 0.4rem; }
 .filter input[type=search] { flex: 1; min-width: 0; padding: 0.3rem 0.5rem; }
