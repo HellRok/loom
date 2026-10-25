@@ -205,7 +205,7 @@ func ensureProject(ctx context.Context, s *shim.Shim, slug string) (name string,
 			return existing, false, nil
 		}
 		return "", false, fmt.Errorf("%s is inside another Project's Root; use `loom project mv` or pick a different directory", s.Cwd)
-	case errors.As(err, &te) && (te.Code == "slug_required" || te.Code == "slug_taken" || te.Code == "invalid_slug"):
+	case errors.As(err, &te) && (te.Code == "slug_required" || te.Code == "slug_taken" || te.Code == "invalid_slug" || te.Code == "reserved_slug"):
 		return "", false, fmt.Errorf("%s Pass --slug <slug>.", te.Message)
 	default:
 		return "", false, err

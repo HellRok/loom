@@ -204,6 +204,9 @@ func TestInitNeedsASlugOutsideGitOrOnCollision(t *testing.T) {
 	if got := slurp(t, filepath.Join(plain, "CLAUDE.md")); got != setupClaude {
 		t.Fatal("CLAUDE.md changed despite the failure")
 	}
+	if out, err := in.initIn(plain, "--slug", "sessions"); err == nil || !strings.Contains(out, "reserved") || !strings.Contains(out, "--slug") {
+		t.Fatalf("want a reserved-slug hint, got %v:\n%s", err, out)
+	}
 	if out, err := in.initIn(plain, "--slug", "plain"); err != nil || !strings.Contains(out, "project plain: created") {
 		t.Fatalf("with --slug: %v\n%s", err, out)
 	}

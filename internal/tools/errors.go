@@ -17,6 +17,7 @@ const (
 	codeNoCwd           Code = "no_cwd"
 	codeSlugRequired    Code = "slug_required"
 	codeInvalidSlug     Code = "invalid_slug"
+	codeReservedSlug    Code = "reserved_slug"
 	codeSlugTaken       Code = "slug_taken"
 	codeRootTaken       Code = "root_taken"
 	codeConfirmMismatch Code = "confirm_mismatch"

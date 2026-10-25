@@ -69,6 +69,24 @@ func TestCreateProjectRejectsSlugsOutsideTheAllowedCharacters(t *testing.T) {
 	}
 }
 
+func TestCreateProjectRejectsSlugsTheWebUIClaims(t *testing.T) {
+	h := newHarness(t)
+	dir := mkdir(t, t.TempDir(), "notes")
+
+	for _, slug := range []string{"static", "events", "sessions"} {
+		r := h.call(dir, "create_project", map[string]any{"slug": slug})
+		if r.code() != "reserved_slug" {
+			t.Fatalf("slug %q: want reserved_slug, got %v", slug, r)
+		}
+		if reserved, _ := r.Err["reserved"].([]any); len(reserved) != 3 {
+			t.Errorf("slug %q: want the three reserved names listed, got %v", slug, r.Err["reserved"])
+		}
+	}
+	if out := h.mustOK(h.call(dir, "create_project", map[string]any{"slug": "notes"})); out["slug"] != "notes" {
+		t.Fatalf("an ordinary slug must still work, got %v", out)
+	}
+}
+
 func TestSlugWithUnderscoreResolvesByRefAndURL(t *testing.T) {
 	h := newHarness(t)
 	repo := gitRepo(t, t.TempDir(), "my_repo")
