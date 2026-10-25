@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/HellRok/loom/internal/shim"
+	"github.com/HellRok/loom/internal/store"
 )
 
 func TestCreateProjectInsideGitUsesGitRootAndBasename(t *testing.T) {
@@ -73,13 +74,13 @@ func TestCreateProjectRejectsSlugsTheWebUIClaims(t *testing.T) {
 	h := newHarness(t)
 	dir := mkdir(t, t.TempDir(), "notes")
 
-	for _, slug := range []string{"static", "events", "sessions"} {
+	for _, slug := range store.ReservedSlugs {
 		r := h.call(dir, "create_project", map[string]any{"slug": slug})
 		if r.code() != "reserved_slug" {
 			t.Fatalf("slug %q: want reserved_slug, got %v", slug, r)
 		}
-		if reserved, _ := r.Err["reserved"].([]any); len(reserved) != 3 {
-			t.Errorf("slug %q: want the three reserved names listed, got %v", slug, r.Err["reserved"])
+		if reserved, _ := r.Err["reserved"].([]any); len(reserved) != len(store.ReservedSlugs) {
+			t.Errorf("slug %q: want the reserved names listed, got %v", slug, r.Err["reserved"])
 		}
 	}
 	if out := h.mustOK(h.call(dir, "create_project", map[string]any{"slug": "notes"})); out["slug"] != "notes" {

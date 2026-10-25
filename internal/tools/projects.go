@@ -17,10 +17,6 @@ import (
 // Slug builds on it.
 const slugPattern = `[a-z0-9_-]+`
 
-// reservedSlugs are the top-level web UI paths ahead of /<slug>; a Project
-// with one of these Slugs would be unreachable in the UI.
-var reservedSlugs = []string{"static", "events", "sessions"}
-
 var slugRE = regexp.MustCompile(`^` + slugPattern + `$`)
 
 type projectOut struct {
@@ -72,8 +68,8 @@ func (h *handlers) createProject(ctx context.Context, c call, in createProjectIn
 	if !slugRE.MatchString(slug) {
 		return projectOut{}, fail(codeInvalidSlug, fmt.Sprintf("Slug %q must use only lowercase letters, digits, hyphens and underscores. Pass a `slug`.", slug), map[string]any{"suggestion": suggestSlug(slug)})
 	}
-	if slices.Contains(reservedSlugs, slug) {
-		return projectOut{}, fail(codeReservedSlug, fmt.Sprintf("Slug %q is reserved by the web UI. Pass a different `slug`.", slug), map[string]any{"reserved": reservedSlugs})
+	if slices.Contains(store.ReservedSlugs, slug) {
+		return projectOut{}, fail(codeReservedSlug, fmt.Sprintf("Slug %q is reserved by the web UI. Pass a different `slug`.", slug), map[string]any{"reserved": store.ReservedSlugs})
 	}
 	p, err := h.store.CreateProject(ctx, slug, root)
 	switch {

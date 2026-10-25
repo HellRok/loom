@@ -367,9 +367,10 @@ type Frontier struct {
 }
 
 // Frontier sorts the open children of Issue parent, all read from one
-// snapshot. An unknown parent is ErrNotFound.
+// snapshot: in WAL mode a deferred transaction fixes its view at its first
+// read. An unknown parent is ErrNotFound.
 func (s *Store) Frontier(ctx context.Context, slug string, parent int64) (Frontier, error) {
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Frontier{}, fmt.Errorf("reading the frontier of %s#%d: %w", slug, parent, err)
 	}

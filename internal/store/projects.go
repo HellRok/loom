@@ -14,6 +14,11 @@ type Project struct {
 	Standalone bool
 }
 
+// ReservedSlugs are the top-level web UI paths ahead of /<slug>: a Project
+// with one of these Slugs would be unreachable in the UI. Keep it in step
+// with the routes web.Register claims; a web test checks each is claimed.
+var ReservedSlugs = []string{"static", "events", "sessions"}
+
 // CreateProject registers a Project. Slugs and Roots are unique.
 func (s *Store) CreateProject(ctx context.Context, slug, root string) (Project, error) {
 	tx, err := s.db.BeginTx(ctx, nil)

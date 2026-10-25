@@ -94,7 +94,7 @@ type server struct {
 // Register adds the UI's routes to mux: /, /static/, /events, /sessions,
 // /<slug>, /<slug>/events, /<slug>/glossary and /<slug>/issues/<n>. It claims
 // every path no more specific pattern takes, so a Project can't have the Slug
-// "static" or "events" or "sessions".
+// in store.ReservedSlugs.
 //
 // It also takes over the Store's one OnChange hook to publish every write to the SSE
 // streams, so register once per Store. The returned function ends the open

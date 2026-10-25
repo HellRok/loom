@@ -831,3 +831,31 @@ func TestUntaggedParameterIsIgnored(t *testing.T) {
 		expect(t, doc, "input[name=untagged], .active-filters .chip, a.clear", 0)
 	}
 }
+
+// A reserved Slug must be a path the UI claims ahead of /<slug>, so each
+// name in store.ReservedSlugs has to stay out of the Project page's reach.
+func TestReservedSlugsAreClaimedAheadOfProjects(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "loom.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	mux := http.NewServeMux()
+	web.Register(mux, web.Deps{Store: st, Graph: web.StoreGraph(st)})
+	for _, slug := range store.ReservedSlugs {
+		// CreateProject doesn't check the list: that is the tools' job.
+		if _, err := st.CreateProject(ctx, slug, "/code/"+slug); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest("GET", "/"+slug, nil)
+		if _, pattern := mux.Handler(req); pattern != "/" {
+			continue // a route of its own, like /events
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if strings.Contains(rec.Body.String(), `id="list-pane"`) {
+			t.Errorf("/%s renders the Project page, so the Slug is not claimed", slug)
+		}
+	}
+}
