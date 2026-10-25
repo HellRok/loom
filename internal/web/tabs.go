@@ -70,7 +70,8 @@ type card struct {
 	store.Issue
 	Type     string // its wayfinder:<type> label
 	URL      string
-	Blockers []refLink // the open ones
+	Blockers []refLink   // the open ones
+	Holder   *HolderView // the claiming Session, if any
 }
 
 type board struct {
@@ -117,10 +118,14 @@ func (s *server) loadTab(ctx context.Context, iv *issueView, requested string, f
 		if err != nil {
 			return err
 		}
+		hs, err := s.holders(ctx)
+		if err != nil {
+			return err
+		}
 		mk := func(is []store.Issue) ([]card, error) {
 			var out []card
 			for _, i := range is {
-				c := card{Issue: i, URL: link(i.Number)}
+				c := card{Issue: i, URL: link(i.Number), Holder: hs.view(i.HolderSession)}
 				for _, l := range types[i.Number] {
 					if strings.HasPrefix(l, "wayfinder:") {
 						c.Type = l

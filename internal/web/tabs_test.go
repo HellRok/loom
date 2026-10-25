@@ -129,6 +129,17 @@ func TestMapBoard(t *testing.T) {
 			t.Errorf("card href = %q", got)
 		}
 		cl := doc.Find(".column.claimed .card")
+		link := cl.Find(".held-by a.session-link")
+		if got := link.Text(); got != "aim-9999" {
+			t.Errorf("claimed card session link = %q", got)
+		}
+		if got := link.AttrOr("href", ""); got != "/sessions/abcdefgh-session-claim-9999" {
+			t.Errorf("claimed card session href = %q", got)
+		}
+		if got := link.AttrOr("title", ""); got != "abcdefgh-session-claim-9999" {
+			t.Errorf("claimed card session title = %q", got)
+		}
+		expect(t, doc, ".column.frontier .card .held-by", 0)
 		if got := cl.Find(".assignee").Text(); got != "Agent Smith" {
 			t.Errorf("claimed assignee = %q", got)
 		}

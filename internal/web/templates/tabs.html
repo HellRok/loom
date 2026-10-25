@@ -14,6 +14,7 @@
       <span class="num">#{{.Number}}</span>
     </a>
     {{if .Assignee}}<span class="assignee">{{.Assignee}}</span>{{end}}
+    {{with .Holder}}<div class="held-by">held by: {{template "holder" .}}</div>{{end}}
     {{if .Blockers}}<span class="blockers">blocked by {{range .Blockers}}{{template "ref" .}} {{end}}</span>{{end}}
   </div>
   {{else}}<p class="empty">Nothing here.</p>{{end}}
