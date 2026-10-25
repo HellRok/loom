@@ -281,31 +281,42 @@ func (s *Store) Parent(ctx context.Context, slug string, n int64) (*Issue, error
 }
 
 func (s *Store) related(ctx context.Context, what, slug string, n int64, query string) ([]Issue, error) {
-	rows, err := s.db.QueryContext(ctx, query, slug, n)
+	_, is, err := related(ctx, s.db, what, slug, n, query)
+	return is, err
+}
+
+// related runs query (taking slug and n) on q and returns the Issues it
+// selects, with their row ids.
+func related(ctx context.Context, q querier, what, slug string, n int64, query string) ([]int64, []Issue, error) {
+	rows, err := q.QueryContext(ctx, query, slug, n)
 	if err != nil {
-		return nil, fmt.Errorf("reading the %s of %s#%d: %w", what, slug, n, err)
+		return nil, nil, fmt.Errorf("reading the %s of %s#%d: %w", what, slug, n, err)
 	}
 	defer rows.Close()
+	ids := []int64{}
 	is := []Issue{}
 	for rows.Next() {
-		_, i, err := scanIssue(rows)
+		id, i, err := scanIssue(rows)
 		if err != nil {
-			return nil, fmt.Errorf("reading the %s of %s#%d: %w", what, slug, n, err)
+			return nil, nil, fmt.Errorf("reading the %s of %s#%d: %w", what, slug, n, err)
 		}
+		ids = append(ids, id)
 		is = append(is, i)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("reading the %s of %s#%d: %w", what, slug, n, err)
+		return nil, nil, fmt.Errorf("reading the %s of %s#%d: %w", what, slug, n, err)
 	}
-	return is, nil
+	return ids, is, nil
 }
+
+const childrenQuery = `
+	SELECT ` + issueCols + ` FROM issues i
+	JOIN issues par ON par.id = i.parent_id JOIN projects p ON p.id = par.project_id
+	WHERE p.slug = ? AND par.number = ? ORDER BY i.number`
 
 // Children lists Issue n's children by number.
 func (s *Store) Children(ctx context.Context, slug string, n int64) ([]Issue, error) {
-	return s.related(ctx, "children", slug, n, `
-		SELECT `+issueCols+` FROM issues i
-		JOIN issues par ON par.id = i.parent_id JOIN projects p ON p.id = par.project_id
-		WHERE p.slug = ? AND par.number = ? ORDER BY i.number`)
+	return s.related(ctx, "children", slug, n, childrenQuery)
 }
 
 // Blockers lists every Issue blocking Issue n, open or closed, by number.
@@ -350,31 +361,36 @@ type Frontier struct {
 	Blocked []Issue
 }
 
-// Frontier sorts the open children of Issue parent. An unknown parent is
-// ErrNotFound.
+// Frontier sorts the open children of Issue parent, all read from one
+// snapshot. An unknown parent is ErrNotFound.
 func (s *Store) Frontier(ctx context.Context, slug string, parent int64) (Frontier, error) {
-	if _, err := s.Issue(ctx, slug, parent); err != nil {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return Frontier{}, fmt.Errorf("reading the frontier of %s#%d: %w", slug, parent, err)
+	}
+	defer tx.Rollback()
+	if _, _, err := issue(ctx, tx, slug, parent); err != nil {
 		return Frontier{}, err
 	}
-	kids, err := s.Children(ctx, slug, parent)
+	ids, kids, err := related(ctx, tx, "children", slug, parent, childrenQuery)
 	if err != nil {
 		return Frontier{}, err
 	}
 	f := Frontier{Ready: []Issue{}, Claimed: []Issue{}, Blocked: []Issue{}}
-	for _, k := range kids {
+	for j, k := range kids {
 		if k.State != StateOpen {
 			continue
 		}
-		open, err := s.OpenBlockers(ctx, slug, k.Number)
+		open, err := openBlockersTx(ctx, tx, ids[j])
 		if err != nil {
-			return Frontier{}, err
+			return Frontier{}, fmt.Errorf("reading the frontier of %s#%d: %w", slug, parent, err)
 		}
-		kids, err := s.OpenChildren(ctx, slug, k.Number)
+		held, err := openChildrenTx(ctx, tx, ids[j], k.Kind)
 		if err != nil {
-			return Frontier{}, err
+			return Frontier{}, fmt.Errorf("reading the frontier of %s#%d: %w", slug, parent, err)
 		}
 		switch {
-		case len(open) > 0 || len(kids) > 0:
+		case len(open) > 0 || len(held) > 0:
 			f.Blocked = append(f.Blocked, k)
 		case k.Claimed():
 			f.Claimed = append(f.Claimed, k)
