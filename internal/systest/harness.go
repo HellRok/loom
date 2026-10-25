@@ -15,6 +15,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -69,7 +71,37 @@ func Start(t *testing.T, slug string) *Loom {
 		t.Fatalf("starting Chrome at %s: %v", chrome, err)
 	}
 	l.Browser = browser
+	l.collectConsoleErrors()
 	return l
+}
+
+// collectConsoleErrors records every console error the page reports:
+// console.error calls, uncaught exceptions and browser log errors such as
+// failed requests. The test fails at cleanup if there were any, so a page
+// that spews errors cannot pass.
+func (l *Loom) collectConsoleErrors() {
+	var mu sync.Mutex
+	var errs []string
+	messages := chromedp.Console(l.Browser)
+	go func() {
+		for m, err := range messages {
+			if err != nil {
+				return
+			}
+			if m.Type == chromedp.ConsoleError || m.IsException() {
+				mu.Lock()
+				errs = append(errs, fmt.Sprintf("%s (%s:%d)", m, m.URL, m.Line))
+				mu.Unlock()
+			}
+		}
+	}()
+	l.t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(errs) > 0 {
+			l.t.Errorf("browser console errors:\n%s", strings.Join(errs, "\n"))
+		}
+	})
 }
 
 // URL is the web UI's address for path.
