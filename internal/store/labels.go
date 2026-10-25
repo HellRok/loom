@@ -122,38 +122,42 @@ func labelIDs(ctx context.Context, q querier, projectID int64, names []string) (
 
 // applyLabels adds and removes Labels on an Issue, recording an Event for
 // each one that actually changed.
-func applyLabels(ctx context.Context, tx *sql.Tx, projectID, issueID int64, add, remove []string, a Actor, at string) error {
-	ids, err := labelIDs(ctx, tx, projectID, slices.Concat(add, remove))
+func applyLabels(ctx context.Context, e edit, add, remove []string) error {
+	pid, err := projectID(ctx, e.tx, e.slug)
+	if err != nil {
+		return err
+	}
+	ids, err := labelIDs(ctx, e.tx, pid, slices.Concat(add, remove))
 	if err != nil {
 		return err
 	}
 	changed := false
 	for _, name := range add {
-		res, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO issue_labels (issue_id, label_id) VALUES (?, ?)`, issueID, ids[name])
+		res, err := e.tx.ExecContext(ctx, `INSERT OR IGNORE INTO issue_labels (issue_id, label_id) VALUES (?, ?)`, e.id, ids[name])
 		if err != nil {
 			return err
 		}
 		if k, _ := res.RowsAffected(); k > 0 {
 			changed = true
-			if err := addEvent(ctx, tx, issueID, a, at, EventLabelled, map[string]any{"label": name}); err != nil {
+			if err := e.event(ctx, EventLabelled, map[string]any{"label": name}); err != nil {
 				return err
 			}
 		}
 	}
 	for _, name := range remove {
-		res, err := tx.ExecContext(ctx, `DELETE FROM issue_labels WHERE issue_id = ? AND label_id = ?`, issueID, ids[name])
+		res, err := e.tx.ExecContext(ctx, `DELETE FROM issue_labels WHERE issue_id = ? AND label_id = ?`, e.id, ids[name])
 		if err != nil {
 			return err
 		}
 		if k, _ := res.RowsAffected(); k > 0 {
 			changed = true
-			if err := addEvent(ctx, tx, issueID, a, at, EventUnlabelled, map[string]any{"label": name}); err != nil {
+			if err := e.event(ctx, EventUnlabelled, map[string]any{"label": name}); err != nil {
 				return err
 			}
 		}
 	}
 	if changed {
-		return touch(ctx, tx, issueID, at)
+		return e.touch(ctx)
 	}
 	return nil
 }
@@ -163,11 +167,7 @@ func applyLabels(ctx context.Context, tx *sql.Tx, projectID, issueID int64, add,
 // Label the Issue has, or removing one it lacks, is a no-op.
 func (s *Store) SetLabels(ctx context.Context, slug string, n int64, add, remove []string, a Actor) (Issue, error) {
 	return s.mutate(ctx, slug, n, "labelling", func(tx *sql.Tx, id int64, i Issue) error {
-		pid, err := projectID(ctx, tx, slug)
-		if err != nil {
-			return err
-		}
-		if err := applyLabels(ctx, tx, pid, id, add, remove, a, now()); err != nil {
+		if err := applyLabels(ctx, edit{tx, slug, id, n, a, now()}, add, remove); err != nil {
 			return err
 		}
 		return checkTicketRules(ctx, tx, id)

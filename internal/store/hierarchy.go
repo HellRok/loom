@@ -80,15 +80,15 @@ func numberOf(ctx context.Context, q querier, id int64) (n int64, err error) {
 
 // setParent points Issue id (number n) at parent (0 for none), recording an
 // Event if that changed anything.
-func setParent(ctx context.Context, tx *sql.Tx, slug string, id, n, parent int64, a Actor, at string) error {
+func setParent(ctx context.Context, e edit, parent int64) error {
 	var current sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT parent_id FROM issues WHERE id = ?`, id).Scan(&current); err != nil {
+	if err := e.tx.QueryRowContext(ctx, `SELECT parent_id FROM issues WHERE id = ?`, e.id).Scan(&current); err != nil {
 		return err
 	}
 	var currentN int64
 	if current.Valid {
 		var err error
-		if currentN, err = numberOf(ctx, tx, current.Int64); err != nil {
+		if currentN, err = numberOf(ctx, e.tx, current.Int64); err != nil {
 			return err
 		}
 	}
@@ -96,77 +96,77 @@ func setParent(ctx context.Context, tx *sql.Tx, slug string, id, n, parent int64
 		if !current.Valid {
 			return nil
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE issues SET parent_id = NULL, updated_at = ? WHERE id = ?`, at, id); err != nil {
+		if _, err := e.tx.ExecContext(ctx, `UPDATE issues SET parent_id = NULL, updated_at = ? WHERE id = ?`, e.at, e.id); err != nil {
 			return err
 		}
-		return addEvent(ctx, tx, id, a, at, EventParentCleared, map[string]any{"parent": currentN})
+		return e.event(ctx, EventParentCleared, map[string]any{"parent": currentN})
 	}
-	pid, err := issueIDByNumber(ctx, tx, slug, parent)
+	pid, err := issueIDByNumber(ctx, e.tx, e.slug, parent)
 	if err != nil {
 		return err
 	}
 	// The new parent mustn't be the Issue or one of its descendants.
 	var cycle bool
-	err = tx.QueryRowContext(ctx, `
+	err = e.tx.QueryRowContext(ctx, `
 		WITH RECURSIVE up(id) AS (
 			SELECT ? UNION SELECT i.parent_id FROM issues i JOIN up ON i.id = up.id WHERE i.parent_id IS NOT NULL
-		) SELECT EXISTS (SELECT 1 FROM up WHERE id = ?)`, pid, id).Scan(&cycle)
+		) SELECT EXISTS (SELECT 1 FROM up WHERE id = ?)`, pid, e.id).Scan(&cycle)
 	if err != nil {
 		return err
 	}
 	if cycle {
-		return &CycleError{Edge: EdgeParent, Issue: n, Other: parent}
+		return &CycleError{Edge: EdgeParent, Issue: e.n, Other: parent}
 	}
 	if current.Valid && current.Int64 == pid {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE issues SET parent_id = ?, updated_at = ? WHERE id = ?`, pid, at, id); err != nil {
+	if _, err := e.tx.ExecContext(ctx, `UPDATE issues SET parent_id = ?, updated_at = ? WHERE id = ?`, pid, e.at, e.id); err != nil {
 		return err
 	}
 	data := map[string]any{"parent": parent}
 	if current.Valid {
 		data["previous"] = currentN
 	}
-	return addEvent(ctx, tx, id, a, at, EventParentSet, data)
+	return e.event(ctx, EventParentSet, data)
 }
 
 // addBlockers makes Issue id (number n) blocked by each of blockers,
 // recording an Event for each new edge. Existing edges are ignored.
-func addBlockers(ctx context.Context, tx *sql.Tx, slug string, id, n int64, blockers []int64, a Actor, at string) error {
+func addBlockers(ctx context.Context, e edit, blockers []int64) error {
 	changed := false
 	for _, b := range blockers {
-		if b == n {
-			return &SelfBlockError{N: n}
+		if b == e.n {
+			return &SelfBlockError{N: e.n}
 		}
-		bid, err := issueIDByNumber(ctx, tx, slug, b)
+		bid, err := issueIDByNumber(ctx, e.tx, e.slug, b)
 		if err != nil {
 			return err
 		}
 		// The Issue mustn't already block the new Blocker, however indirectly.
 		var cycle bool
-		err = tx.QueryRowContext(ctx, `
+		err = e.tx.QueryRowContext(ctx, `
 			WITH RECURSIVE chain(id) AS (
 				SELECT ? UNION SELECT ib.blocker_id FROM issue_blockers ib JOIN chain ON ib.issue_id = chain.id
-			) SELECT EXISTS (SELECT 1 FROM chain WHERE id = ?)`, bid, id).Scan(&cycle)
+			) SELECT EXISTS (SELECT 1 FROM chain WHERE id = ?)`, bid, e.id).Scan(&cycle)
 		if err != nil {
 			return err
 		}
 		if cycle {
-			return &CycleError{Edge: EdgeBlocker, Issue: n, Other: b}
+			return &CycleError{Edge: EdgeBlocker, Issue: e.n, Other: b}
 		}
-		res, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO issue_blockers (issue_id, blocker_id) VALUES (?, ?)`, id, bid)
+		res, err := e.tx.ExecContext(ctx, `INSERT OR IGNORE INTO issue_blockers (issue_id, blocker_id) VALUES (?, ?)`, e.id, bid)
 		if err != nil {
 			return err
 		}
 		if k, _ := res.RowsAffected(); k > 0 {
 			changed = true
-			if err := addEvent(ctx, tx, id, a, at, EventBlockerAdded, map[string]any{"blocker": b}); err != nil {
+			if err := e.event(ctx, EventBlockerAdded, map[string]any{"blocker": b}); err != nil {
 				return err
 			}
 		}
 	}
 	if changed {
-		return touch(ctx, tx, id, at)
+		return e.touch(ctx)
 	}
 	return nil
 }
@@ -224,7 +224,7 @@ func checkTicketRules(ctx context.Context, q querier, id int64) error {
 // Setting the parent it already has changes nothing.
 func (s *Store) SetParent(ctx context.Context, slug string, n, parent int64, a Actor) (Issue, error) {
 	return s.mutate(ctx, slug, n, "setting the parent of", func(tx *sql.Tx, id int64, i Issue) error {
-		if err := setParent(ctx, tx, slug, id, n, parent, a, now()); err != nil {
+		if err := setParent(ctx, edit{tx, slug, id, n, a, now()}, parent); err != nil {
 			return err
 		}
 		return checkTicketRules(ctx, tx, id)
@@ -237,7 +237,7 @@ func (s *Store) SetParent(ctx context.Context, slug string, n, parent int64, a A
 // it already has are ignored.
 func (s *Store) AddBlockers(ctx context.Context, slug string, n int64, blockers []int64, a Actor) (Issue, error) {
 	return s.mutateAlso(ctx, slug, n, "blocking", blockers, func(tx *sql.Tx, id int64, i Issue) error {
-		return addBlockers(ctx, tx, slug, id, n, blockers, a, now())
+		return addBlockers(ctx, edit{tx, slug, id, n, a, now()}, blockers)
 	})
 }
 

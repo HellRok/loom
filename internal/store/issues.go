@@ -189,6 +189,24 @@ func issue(ctx context.Context, q querier, slug string, n int64) (int64, Issue, 
 	return id, i, nil
 }
 
+// edit is one change to an Issue inside a transaction: the Issue (by row id
+// and number, in the Project slug), who is making it and when.
+type edit struct {
+	tx    *sql.Tx
+	slug  string
+	id, n int64
+	actor Actor
+	at    string
+}
+
+// event records an Event of type typ for the Issue.
+func (e edit) event(ctx context.Context, typ string, data map[string]any) error {
+	return addEvent(ctx, e.tx, e.id, e.actor, e.at, typ, data)
+}
+
+// touch stamps the Issue as updated at the time of the edit.
+func (e edit) touch(ctx context.Context) error { return touch(ctx, e.tx, e.id, e.at) }
+
 func addEvent(ctx context.Context, tx *sql.Tx, issueID int64, a Actor, at, typ string, data map[string]any) error {
 	if data == nil {
 		data = map[string]any{}
@@ -279,13 +297,14 @@ func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, in NewIss
 	if err := addEvent(ctx, tx, id, a, t, EventCreated, nil); err != nil {
 		return Issue{}, fmt.Errorf("creating issue in %s: %w", slug, err)
 	}
-	if err := setParent(ctx, tx, slug, id, n, in.Parent, a, t); err != nil {
+	e := edit{tx, slug, id, n, a, t}
+	if err := setParent(ctx, e, in.Parent); err != nil {
 		return Issue{}, createError(slug, err)
 	}
-	if err := addBlockers(ctx, tx, slug, id, n, in.BlockedBy, a, t); err != nil {
+	if err := addBlockers(ctx, e, in.BlockedBy); err != nil {
 		return Issue{}, createError(slug, err)
 	}
-	if err := applyLabels(ctx, tx, projectID, id, in.Labels, nil, a, t); err != nil {
+	if err := applyLabels(ctx, e, in.Labels, nil); err != nil {
 		return Issue{}, createError(slug, err)
 	}
 	if err := checkTicketRules(ctx, tx, id); err != nil {
@@ -583,11 +602,7 @@ func (s *Store) CloseIssue(ctx context.Context, slug string, n int64, comment st
 		}
 		t := now()
 		if wontfix {
-			pid, err := projectID(ctx, tx, slug)
-			if err != nil {
-				return err
-			}
-			if err := applyLabels(ctx, tx, pid, id, []string{LabelWontfix}, nil, a, t); err != nil {
+			if err := applyLabels(ctx, edit{tx, slug, id, n, a, t}, []string{LabelWontfix}, nil); err != nil {
 				return err
 			}
 			if err := checkTicketRules(ctx, tx, id); err != nil {
