@@ -207,11 +207,12 @@ The Project is found from the agent's working directory. Maps, Tickets, blocking
 
 ### MCP tool surface
 
-Built on the official `modelcontextprotocol/go-sdk` v1.8.x with typed `mcp.AddTool[In, Out]`, and a `NewStreamableHTTPHandler` in stateless mode (no Roots, no per-session server state). 23 tools: the 22 from the prototype (branch `prototype/mcp-tool-surface`) plus `move_project`:
+Built on the official `modelcontextprotocol/go-sdk` v1.8.x with typed `mcp.AddTool[In, Out]`, and a `NewStreamableHTTPHandler` in stateless mode (no Roots, no per-session server state). 27 tools: the 22 from the prototype (branch `prototype/mcp-tool-surface`) plus `move_project`, `set_standalone`, `list_sessions`, `view_glossary` and `edit_glossary`:
 
-- **Projects**: `create_project {slug?}`, `list_projects`, `delete_project {slug, confirm: "<slug>"}`, `move_project {project}`.
-- **Reading**: `view_issue {ref, comments=true, events=false}` (children as summaries); `list_issues {state=open|closed|all, labels, no_labels, parent, kind, assignee=none|any|<name>, blocked, held_by=<session>|"me", detail=summary|full, limit=50}` (oldest first, with `total`); `frontier {parent}` (returns `{frontier, skipped: {claimed, blocked}}`).
+- **Projects**: `create_project {slug?}`, `list_projects`, `delete_project {slug, confirm: "<slug>"}`, `move_project {project}`, `set_standalone`.
+- **Reading**: `view_issue {ref, comments=true, events=false}` (children as summaries); `list_issues {state=open|closed|all, labels, no_labels, parent, kind, assignee=none|any|<name>, blocked, held_by=<session>|"me", detail=summary|full, limit=50}` (oldest first, with `total`); `frontier {parent}` (returns `{frontier, skipped: {claimed, blocked}}`); `list_sessions` (Sessions with their claims and idle time); `view_glossary`.
 - **Writing**: `create_issue {title, body, kind, parent, labels, blocked_by}`, `edit_issue {ref, version, title?, body?}`, `append_to_section {ref, heading, text}`, `comment {ref, body}`, `label {ref, add, remove}`, `close {ref, comment?, wontfix?}`, `reopen`, `claim`, `release`, `set_parent {ref, parent|null}`, `add_blockers`, `remove_blockers`, `delete_issue {ref, confirm: "#N"}`.
+- **Glossary**: `edit_glossary`.
 - **Labels**: `list_labels` (with usage counts), `create_label` (idempotent), `delete_label`.
 - **Common**: every tool takes an optional `project` (and `session` for direct HTTP). Refs accept `#N`, `N`, `slug#N` or `http://127.0.0.1:<port>/<slug>/issues/<n>`. Outputs are structured JSON (`structuredContent` plus a JSON text copy). Create returns `{ref, url, title, kind, version}`.
 - **Errors**: MCP tool errors shaped `{error: {code, message, ...data}}`, carrying what the agent needs next. Codes include `no_project` (`projects`, with `root_missing`), `no_session`, `invalid_session`, `already_claimed` (`holder`, `holder_session`, `claimed_at`), `version_conflict` (`current {version, title, body}`), `undefined_label` (`valid`), `invalid_ticket` (`valid_types`), `no_section` (`headings`) and cycle/self-block rejections. A failed call changes nothing.
