@@ -30,6 +30,8 @@ type InvalidTicketError struct {
 
 func (e *InvalidTicketError) Error() string { return e.Message }
 
+func (*InvalidTicketError) documented() {}
+
 // Edge names the kind of link a CycleError is about.
 type Edge string
 
@@ -50,16 +52,22 @@ func (e *CycleError) Error() string {
 	return fmt.Sprintf("making #%d the %s of #%d would make a cycle", e.Other, e.Edge, e.Issue)
 }
 
+func (*CycleError) documented() {}
+
 // SelfBlockError reports an Issue made to block itself.
 type SelfBlockError struct{ N int64 }
 
 func (e *SelfBlockError) Error() string { return fmt.Sprintf("#%d can't block itself", e.N) }
+
+func (*SelfBlockError) documented() {}
 
 // MissingIssueError reports a parent or Blocker that doesn't exist in the
 // Project.
 type MissingIssueError struct{ N int64 }
 
 func (e *MissingIssueError) Error() string { return fmt.Sprintf("no Issue #%d", e.N) }
+
+func (*MissingIssueError) documented() {}
 
 // issueIDByNumber finds the row id of Issue n in the Project slug, or
 // returns a *MissingIssueError.

@@ -43,6 +43,8 @@ func (e *UndefinedLabelError) Error() string {
 	return fmt.Sprintf("label %q is not defined; valid labels are %q", e.Name, e.Valid)
 }
 
+func (*UndefinedLabelError) documented() {}
+
 // LabelInUseError reports a Label that Issues still carry.
 type LabelInUseError struct {
 	Name   string

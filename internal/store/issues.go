@@ -87,6 +87,8 @@ func (e *VersionConflictError) Error() string {
 	return fmt.Sprintf("#%d is at version %d", e.Current.Number, e.Current.Version)
 }
 
+func (*VersionConflictError) documented() {}
+
 // NoSectionError reports a heading the body doesn't have.
 type NoSectionError struct {
 	Headings []string
@@ -95,6 +97,8 @@ type NoSectionError struct {
 func (e *NoSectionError) Error() string {
 	return fmt.Sprintf("no such section; headings are %q", e.Headings)
 }
+
+func (*NoSectionError) documented() {}
 
 // Assignee filters for IssueFilter.
 const (
@@ -325,17 +329,25 @@ func (s *Store) CreateIssue(ctx context.Context, slug string, a Actor, in NewIss
 	return i, nil
 }
 
+// DocumentedError is implemented by the errors an Issue operation returns
+// for the caller to act on, as opposed to an unexpected failure. Every one of
+// them marks itself, so a function passing documented errors on, like
+// createError, and one coding them, like the tools' issueError, share one
+// list: the types with this method.
+type DocumentedError interface {
+	error
+	documented()
+}
+
+// Documented reports whether err is, or wraps, a documented error.
+func Documented(err error) bool {
+	_, ok := errors.AsType[DocumentedError](err)
+	return ok
+}
+
 // createError passes on the errors CreateIssue documents and wraps the rest.
 func createError(slug string, err error) error {
-	var (
-		undefined *UndefinedLabelError
-		invalid   *InvalidTicketError
-		cycle     *CycleError
-		self      *SelfBlockError
-		missing   *MissingIssueError
-	)
-	if errors.As(err, &undefined) || errors.As(err, &invalid) || errors.As(err, &cycle) ||
-		errors.As(err, &self) || errors.As(err, &missing) {
+	if Documented(err) {
 		return err
 	}
 	return fmt.Errorf("creating issue in %s: %w", slug, err)
