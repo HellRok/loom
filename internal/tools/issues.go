@@ -45,10 +45,10 @@ func issueError(slug string, n int64, err error) error {
 	}
 	if cycle, ok := errors.AsType[*store.CycleError](err); ok {
 		msg := fmt.Sprintf("#%d is already (transitively) blocked by #%d, so it can't also block it.", cycle.Other, cycle.Issue)
-		if cycle.Edge == "parent" {
+		if cycle.Edge == store.EdgeParent {
 			msg = fmt.Sprintf("#%d is #%d or one of its descendants, so it can't be its parent.", cycle.Other, cycle.Issue)
 		}
-		return fail(codeCycle, msg, map[string]any{"edge": cycle.Edge})
+		return fail(codeCycle, msg, map[string]any{"edge": string(cycle.Edge)})
 	}
 	if self, ok := errors.AsType[*store.SelfBlockError](err); ok {
 		return fail(codeSelfBlock, fmt.Sprintf("#%d can't block itself.", self.N), nil)
@@ -379,6 +379,23 @@ type issueSummary struct {
 	OpenBlockers []string      `json:"open_blockers,omitempty"`
 	Body         *string       `json:"body,omitempty"`
 	Comments     *[]commentOut `json:"comments,omitempty"`
+}
+
+// summary is Issue i as listed: no body or comments.
+func (h *handlers) summary(ctx context.Context, slug string, i store.Issue) (issueSummary, error) {
+	s := issueSummary{Ref: refString(i.Number), Title: i.Title, Kind: i.Kind, State: i.State, Assignee: nullable(i.Assignee), HolderSession: nullable(i.HolderSession)}
+	var err error
+	if s.Labels, err = h.store.IssueLabels(ctx, slug, i.Number); err != nil {
+		return s, err
+	}
+	open, err := h.store.OpenBlockers(ctx, slug, i.Number)
+	if err != nil {
+		return s, err
+	}
+	if len(open) > 0 {
+		s.OpenBlockers = refs(open)
+	}
+	return s, nil
 }
 
 type listIssuesOut struct {

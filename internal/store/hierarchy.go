@@ -30,10 +30,17 @@ type InvalidTicketError struct {
 
 func (e *InvalidTicketError) Error() string { return e.Message }
 
+// Edge names the kind of link a CycleError is about.
+type Edge string
+
+const (
+	EdgeParent  Edge = "parent"
+	EdgeBlocker Edge = "blocker"
+)
+
 // CycleError reports a parent or Blocker edge that would close a loop.
 type CycleError struct {
-	// Edge is "parent" or "blocker".
-	Edge string
+	Edge Edge
 	// Issue and Other are the numbers the edge would join: Other would be
 	// Issue's parent or Blocker.
 	Issue, Other int64
@@ -64,6 +71,8 @@ func issueIDByNumber(ctx context.Context, q querier, slug string, n int64) (int6
 	return id, err
 }
 
+// numberOf is the number of the Issue with row id: the n people see, as
+// opposed to the id that keys the table.
 func numberOf(ctx context.Context, q querier, id int64) (n int64, err error) {
 	err = q.QueryRowContext(ctx, `SELECT number FROM issues WHERE id = ?`, id).Scan(&n)
 	return n, err
@@ -106,7 +115,7 @@ func setParent(ctx context.Context, tx *sql.Tx, slug string, id, n, parent int64
 		return err
 	}
 	if cycle {
-		return &CycleError{Edge: "parent", Issue: n, Other: parent}
+		return &CycleError{Edge: EdgeParent, Issue: n, Other: parent}
 	}
 	if current.Valid && current.Int64 == pid {
 		return nil
@@ -143,7 +152,7 @@ func addBlockers(ctx context.Context, tx *sql.Tx, slug string, id, n int64, bloc
 			return err
 		}
 		if cycle {
-			return &CycleError{Edge: "blocker", Issue: n, Other: b}
+			return &CycleError{Edge: EdgeBlocker, Issue: n, Other: b}
 		}
 		res, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO issue_blockers (issue_id, blocker_id) VALUES (?, ?)`, id, bid)
 		if err != nil {
@@ -169,22 +178,18 @@ func addBlockers(ctx context.Context, tx *sql.Tx, slug string, id, n int64, bloc
 func checkTicketRules(ctx context.Context, q querier, id int64) error {
 	var n int64
 	var kind string
-	var parent sql.NullInt64
-	if err := q.QueryRowContext(ctx, `SELECT number, kind, parent_id FROM issues WHERE id = ?`, id).Scan(&n, &kind, &parent); err != nil {
+	var parent, pn sql.NullInt64
+	var pkind sql.NullString
+	if err := q.QueryRowContext(ctx, `
+		SELECT i.number, i.kind, i.parent_id, par.number, par.kind
+		FROM issues i LEFT JOIN issues par ON par.id = i.parent_id
+		WHERE i.id = ?`, id).Scan(&n, &kind, &parent, &pn, &pkind); err != nil {
 		return err
 	}
 	if kind == KindMap && parent.Valid {
 		return &InvalidTicketError{Message: fmt.Sprintf("#%d is a Map, and a Map can't have a parent.", n)}
 	}
-	if !parent.Valid {
-		return nil
-	}
-	var pn int64
-	var pkind string
-	if err := q.QueryRowContext(ctx, `SELECT number, kind FROM issues WHERE id = ?`, parent.Int64).Scan(&pn, &pkind); err != nil {
-		return err
-	}
-	if pkind != KindMap {
+	if !parent.Valid || pkind.String != KindMap {
 		return nil
 	}
 	rows, err := q.QueryContext(ctx, `
@@ -208,7 +213,7 @@ func checkTicketRules(ctx context.Context, q querier, id int64) error {
 		return err
 	}
 	if len(types) != 1 {
-		return &InvalidTicketError{Message: fmt.Sprintf("#%d is a Ticket (a child of Map #%d), so it needs exactly one wayfinder:<type> label; it has %d.", n, pn, len(types))}
+		return &InvalidTicketError{Message: fmt.Sprintf("#%d is a Ticket (a child of Map #%d), so it needs exactly one wayfinder:<type> label; it has %d.", n, pn.Int64, len(types))}
 	}
 	return nil
 }

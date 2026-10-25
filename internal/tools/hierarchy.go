@@ -52,23 +52,6 @@ func refs(is []store.Issue) []string {
 	return out
 }
 
-// summary is Issue i as listed: no body or comments.
-func (h *handlers) summary(ctx context.Context, slug string, i store.Issue) (issueSummary, error) {
-	s := issueSummary{Ref: refString(i.Number), Title: i.Title, Kind: i.Kind, State: i.State, Assignee: nullable(i.Assignee), HolderSession: nullable(i.HolderSession)}
-	var err error
-	if s.Labels, err = h.store.IssueLabels(ctx, slug, i.Number); err != nil {
-		return s, err
-	}
-	open, err := h.store.OpenBlockers(ctx, slug, i.Number)
-	if err != nil {
-		return s, err
-	}
-	if len(open) > 0 {
-		s.OpenBlockers = refs(open)
-	}
-	return s, nil
-}
-
 // fillRelations adds Issue n's parent, Blockers, children and open children
 // to out.
 func (h *handlers) fillRelations(ctx context.Context, slug string, n int64, out *viewIssueOut) error {

@@ -628,9 +628,10 @@ func setState(ctx context.Context, tx *sql.Tx, issueID int64, state, event strin
 // edges; its children are left parentless, each with an Event. Its number is
 // never reused.
 func (s *Store) DeleteIssue(ctx context.Context, slug string, n int64, a Actor) error {
+	wrap := func(err error) error { return fmt.Errorf("deleting %s#%d: %w", slug, n, err) }
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		return wrap(err)
 	}
 	defer tx.Rollback()
 	id, _, err := issue(ctx, tx, slug, n)
@@ -639,40 +640,40 @@ func (s *Store) DeleteIssue(ctx context.Context, slug string, n int64, a Actor) 
 	}
 	parent, err := parentNumber(ctx, tx, id)
 	if err != nil {
-		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		return wrap(err)
 	}
 	t := now()
 	rows, err := tx.QueryContext(ctx, `SELECT id, number FROM issues WHERE parent_id = ?`, id)
 	if err != nil {
-		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		return wrap(err)
 	}
 	var kids, kidNumbers []int64
 	for rows.Next() {
 		var k, kn int64
 		if err := rows.Scan(&k, &kn); err != nil {
 			rows.Close()
-			return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+			return wrap(err)
 		}
 		kids = append(kids, k)
 		kidNumbers = append(kidNumbers, kn)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		return wrap(err)
 	}
 	for _, k := range kids {
 		if err := addEvent(ctx, tx, k, a, t, EventParentCleared, map[string]any{"parent": n}); err != nil {
-			return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+			return wrap(err)
 		}
 		if err := touch(ctx, tx, k, t); err != nil {
-			return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+			return wrap(err)
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM issues WHERE id = ?`, id); err != nil {
-		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		return wrap(err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("deleting %s#%d: %w", slug, n, err)
+		return wrap(err)
 	}
 	s.notify(slug, append([]int64{n, parent}, kidNumbers...)...)
 	return nil
