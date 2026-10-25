@@ -2,9 +2,7 @@ package store_test
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/HellRok/loom/internal/store"
@@ -27,25 +25,30 @@ func TestCreateIssuePassesOnDocumentedErrorsUnwrapped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for name, in := range map[string]store.NewIssue{
-		"undefined label": {Kind: store.KindIssue, Title: "t", Labels: []string{"nope"}},
-		"missing parent":  {Kind: store.KindIssue, Title: "t", Parent: 99},
-		"map with parent": {Kind: store.KindMap, Title: "t", Parent: 1},
-		"self block":      {Kind: store.KindIssue, Title: "t", BlockedBy: []int64{2}}, // the new Issue is #2
+	// Each case names the concrete error CreateIssue must return itself: a
+	// type assertion, not errors.As, so an error wrapped on the way out fails.
+	for _, tc := range []struct {
+		name string
+		in   store.NewIssue
+		is   func(error) bool
+	}{
+		{"undefined label", store.NewIssue{Kind: store.KindIssue, Title: "t", Labels: []string{"nope"}},
+			func(err error) bool { _, ok := err.(*store.UndefinedLabelError); return ok }},
+		{"missing parent", store.NewIssue{Kind: store.KindIssue, Title: "t", Parent: 99},
+			func(err error) bool { _, ok := err.(*store.MissingIssueError); return ok }},
+		{"map with parent", store.NewIssue{Kind: store.KindMap, Title: "t", Parent: 1},
+			func(err error) bool { _, ok := err.(*store.InvalidTicketError); return ok }},
+		{"self block", store.NewIssue{Kind: store.KindIssue, Title: "t", BlockedBy: []int64{2}}, // the new Issue is #2
+			func(err error) bool { _, ok := err.(*store.SelfBlockError); return ok }},
 	} {
-		_, err := st.CreateIssue(ctx, "app", actor, in)
-		if err == nil {
-			t.Errorf("%s: want an error", name)
-			continue
-		}
-		if !store.Documented(err) {
-			t.Errorf("%s: %T is not a documented error: %v", name, err, err)
-		}
-		if strings.Contains(err.Error(), "creating issue in") {
-			t.Errorf("%s: error was wrapped: %v", name, err)
-		}
-		if errors.Unwrap(err) != nil {
-			t.Errorf("%s: error wraps another: %v", name, err)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := st.CreateIssue(ctx, "app", actor, tc.in)
+			if !tc.is(err) {
+				t.Fatalf("got %T (%v), want the documented error itself", err, err)
+			}
+			if !store.Documented(err) {
+				t.Errorf("%T is not documented", err)
+			}
+		})
 	}
 }
