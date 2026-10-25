@@ -45,7 +45,7 @@ Read it as in **Read an issue** above.
 Used by `/wayfinder`. The **map** is a single Issue of kind `map` with **child** Issues as tickets.
 
 - **Map**: `create_issue {kind: "map", title, body}`, holding the Destination / Notes / Decisions-so-far / Fog body. Where the skill says "labelled `wayfinder:map`", this is what it means: Loom has no such label. Find maps with `list_issues {kind: "map"}`.
-- **Child ticket**: `create_issue {parent: <map>, labels: ["wayfinder:<type>"]}` (`research`/`prototype`/`grilling`/`task`), exactly one type label.
+- **Child ticket**: `create_issue {parent: <map>, labels: ["wayfinder:<type>"]}` (`research`/`prototype`/`grilling`/`task`), exactly one type label. A Ticket may have children of its own (sub-issues); those are ordinary Issues, not Tickets, so they carry no `wayfinder:` label and may take triage labels.
 - **Blocking**: native. `blocked_by` on `create_issue`, or `add_blockers {ref, blocked_by}` afterwards (`remove_blockers` to undo). A ticket is unblocked when every blocker is closed. An Issue other than a Map is also held back while it has an open child, or an open descendant below a closed one (won't-fix counts as closed): `claim` refuses it, and `frontier` lists it as blocked, but no Blocker is recorded, so `remove_blockers` doesn't apply and it lifts when the last child closes.
 - **Frontier query**: `frontier {parent: <map>}`: open, unblocked, unclaimed children in map order; first wins.
 - **Claim**: `claim {ref}`, the session's first write. It assigns the ticket to the configured user and records your session; `already: true` means your session already holds it. Your own claims: `list_issues {held_by: "me"}`.

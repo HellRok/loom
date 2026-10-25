@@ -37,7 +37,7 @@ A named tag defined on a Project and applied to Issues; a new Project starts wit
 _Avoid_: Tag
 
 **Ticket**:
-An Issue whose parent is a Map, holding one decision question and typed by exactly one wayfinder type label. The children of an ordinary Issue (e.g. the slices `/to-tickets` creates under a spec) are not Tickets, even though the skills call them "tickets".
+An Issue whose parent is a Map, holding one decision question and typed by exactly one wayfinder type label. A Ticket may itself have children (e.g. the slices `/to-tickets` creates from it); like the children of any ordinary Issue (such as a spec's slices) they are not Tickets, even though the skills call them "tickets".
 _Avoid_: using "ticket" for Issues in general or for a spec's children
 
 **Map**:

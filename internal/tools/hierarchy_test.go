@@ -302,17 +302,18 @@ func TestMapRulesForTickets(t *testing.T) {
 		t.Fatalf("ticket = %s, want #2", ticket)
 	}
 
-	// Maps have no parent; Tickets have no children.
+	// Maps have no parent; Tickets may have children, which are plain Issues.
 	plain := h.issue(dir, map[string]any{"title": "plain"})
 	validTypes(t, h.call(dir, "set_parent", map[string]any{"ref": m, "parent": plain}))
 	validTypes(t, h.call(dir, "create_issue", map[string]any{"title": "m2", "kind": "map", "parent": plain}))
-	validTypes(t, h.call(dir, "create_issue", map[string]any{"title": "grandchild", "parent": ticket}))
-	validTypes(t, h.call(dir, "set_parent", map[string]any{"ref": plain, "parent": ticket}))
+	h.issue(dir, map[string]any{"title": "grandchild", "parent": ticket})
+	h.mustOK(h.call(dir, "set_parent", map[string]any{"ref": plain, "parent": ticket}))
 
-	// An Issue with children can't become a Ticket; one without needs its label first.
+	// An Issue with children can become a Ticket, but needs its label first.
 	h.issue(dir, map[string]any{"title": "kid", "parent": plain})
-	h.mustOK(h.call(dir, "label", map[string]any{"ref": plain, "add": []string{"wayfinder:task"}}))
 	validTypes(t, h.call(dir, "set_parent", map[string]any{"ref": plain, "parent": m}))
+	h.mustOK(h.call(dir, "label", map[string]any{"ref": plain, "add": []string{"wayfinder:task"}}))
+	h.mustOK(h.call(dir, "set_parent", map[string]any{"ref": plain, "parent": m}))
 	loose := h.issue(dir, map[string]any{"title": "loose"})
 	validTypes(t, h.call(dir, "set_parent", map[string]any{"ref": loose, "parent": m}))
 	h.mustOK(h.call(dir, "label", map[string]any{"ref": loose, "add": []string{"wayfinder:research"}}))

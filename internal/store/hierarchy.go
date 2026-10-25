@@ -164,8 +164,8 @@ func addBlockers(ctx context.Context, tx *sql.Tx, slug string, id, n int64, bloc
 
 // checkTicketRules fails with an *InvalidTicketError if Issue id, as it now
 // stands, breaks the Map rules: a Map has no parent, and a Ticket (a child
-// of a Map) has exactly one wayfinder type label and no children. Its other
-// Labels are unrestricted.
+// of a Map) has exactly one wayfinder type label. Its other Labels are
+// unrestricted, and it may have children of its own, which are ordinary Issues.
 func checkTicketRules(ctx context.Context, q querier, id int64) error {
 	var n int64
 	var kind string
@@ -181,28 +181,11 @@ func checkTicketRules(ctx context.Context, q querier, id int64) error {
 	}
 	var pn int64
 	var pkind string
-	var grand sql.NullInt64
-	if err := q.QueryRowContext(ctx, `SELECT number, kind, parent_id FROM issues WHERE id = ?`, parent.Int64).Scan(&pn, &pkind, &grand); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT number, kind FROM issues WHERE id = ?`, parent.Int64).Scan(&pn, &pkind); err != nil {
 		return err
-	}
-	if grand.Valid {
-		var gkind string
-		if err := q.QueryRowContext(ctx, `SELECT kind FROM issues WHERE id = ?`, grand.Int64).Scan(&gkind); err != nil {
-			return err
-		}
-		if gkind == KindMap {
-			return &InvalidTicketError{Message: fmt.Sprintf("#%d is a Ticket (a child of a Map), and Tickets can't have children.", pn)}
-		}
 	}
 	if pkind != KindMap {
 		return nil
-	}
-	var kids int
-	if err := q.QueryRowContext(ctx, `SELECT count(*) FROM issues WHERE parent_id = ?`, id).Scan(&kids); err != nil {
-		return err
-	}
-	if kids > 0 {
-		return &InvalidTicketError{Message: fmt.Sprintf("#%d has children, so it can't be a Ticket under Map #%d.", n, pn)}
 	}
 	rows, err := q.QueryContext(ctx, `
 		SELECT l.name FROM issue_labels il JOIN labels l ON l.id = il.label_id
