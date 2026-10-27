@@ -1,0 +1,20 @@
+/* PROTOTYPE variant C: dense, dark navbar, cards and messages, a label tag cloud. */
+:root { --bulma-body-size: 0.9375rem; }
+.nav { background: var(--bulma-scheme-main-bis); }
+.menu-list a { display: flex; justify-content: space-between; align-items: center; padding: 0.2em 0.5em; }
+.label-chip { background: var(--chip); color: #fff; }
+.labels .label-chip.is-active { outline: 2px solid var(--bulma-text-strong); outline-offset: 1px; }
+.labels .count { opacity: 0.75; margin-left: 0.35em; }
+.list { background: var(--bulma-background); }
+:is(.rows, .not-ready) .row.box { padding: 0.5rem 0.65rem; margin-bottom: 0.5rem; }
+:is(.rows, .not-ready) .row.is-selected { box-shadow: inset 3px 0 0 var(--bulma-link), var(--bulma-shadow); }
+.row-labels { margin-top: 0.25rem; }
+.prop-key { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--bulma-text-weak); }
+.props .cell { min-width: 0; }
+.board-column { background: var(--bulma-scheme-main-bis); border-radius: var(--bulma-radius-large); padding: 0.6rem; }
+.board-card .card-header-title { padding: 0.5rem 0.75rem; }
+.board-card .card-content { padding: 0.5rem 0.75rem; font-size: 0.85em; }
+.board-card .card-content:empty { display: none; }
+.board-card .num, .board-card .held-by, .board-card .blockers { color: var(--bulma-text-weak); }
+.board-card .card-footer-item { padding: 0.35rem; font-size: 0.8em; color: var(--bulma-text-weak); }
+.decision .gist { margin: 0.2rem 0 0; color: var(--bulma-text-weak); }

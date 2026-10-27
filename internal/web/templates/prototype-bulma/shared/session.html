@@ -1,0 +1,18 @@
+{{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/events">{{template "session-pane" .}}</div>{{end}}
+
+{{define "session-pane"}}<section class="session section" id="session-pane" data-live hx-get="{{.Holder.URL}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+<div class="container is-max-desktop">
+<h1 class="title">Session <span title="{{.Session.ID}}">{{.Holder.Short}}</span></h1>
+<p class="meta subtitle is-6"><code class="full-id">{{.Session.ID}}</code> · <span class="idle">{{.Holder.Idle}}</span> · last seen <time datetime="{{iso .Session.LastSeen}}">{{ago .Session.LastSeen}}</time> · first seen <time datetime="{{iso .Session.FirstSeen}}">{{time .Session.FirstSeen}}</time></p>
+<h2 class="title is-5">Holds</h2>
+<ul class="held">
+  {{range .Held}}<li><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></li>
+  {{else}}<li class="empty">Holds no Issues.</li>{{end}}
+</ul>
+<h2 class="title is-5 mt-5">Events</h2>
+<ul class="events">
+  {{range .Events}}<li><time datetime="{{iso .At}}">{{time .At}}</time> <span class="type">{{.Type}}</span> <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></li>
+  {{else}}<li class="empty">No Events.</li>{{end}}
+</ul>
+</div>
+</section>{{end}}

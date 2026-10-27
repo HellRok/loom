@@ -1,0 +1,76 @@
+{{define "main"}}<div class="panes" hx-ext="sse,morph" sse-connect="/{{.Slug}}/events">
+{{template "nav" .}}
+{{template "list-pane" .}}
+{{template "issue-pane" .}}
+</div>{{end}}
+
+{{define "list-pane"}}<section class="list" id="list-pane" aria-label="Issues" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body, htmx:afterSwap[detail.target.id=='issue-pane' &amp;&amp; detail.requestConfig.elt.hasAttribute('hx-push-url')] from:body" hx-target="this" hx-swap="morph:outerHTML">
+  <form class="filter" method="get" action="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">
+    {{if ne .View .DefaultView}}<input type="hidden" name="view" value="{{.View}}">{{end}}
+    {{range .Labels}}<input type="hidden" name="label" value="{{.}}">{{end}}
+    <div class="field has-addons mb-1">
+      <div class="control is-expanded"><input class="input is-small" type="search" name="q" value="{{.Q}}" placeholder="Filter by title" aria-label="Filter by title"></div>
+      <div class="control"><button class="button is-small" type="submit">Filter</button></div>
+      {{if or .Q .Labels}}<div class="control"><a class="clear button is-small is-text" href="{{.Clear}}" hx-get="{{.Clear}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">clear</a></div>{{end}}
+    </div>
+  </form>
+  <p class="active-filters is-size-7 has-text-grey mb-2">{{len .Rows}} shown{{if .Labels}} · labels: {{range .Labels}}<span class="tag is-small">{{.}}</span> {{end}}{{end}}{{if .Q}} · matching <span class="tag is-small">{{.Q}}</span>{{end}}</p>
+  <ul class="rows">
+    {{range .Rows}}
+    <li class="row status-{{.Status}}{{if .Selected}} is-selected{{end}}" id="row-{{.Number}}">
+      <div class="row-title"><a class="row-link" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true" title="{{.Status}}"><span class="glyph">{{.Glyph}}</span> <span class="num">#{{.Number}}</span> <span class="issue-title">{{.Title}}</span></a></div>
+      {{if .Labels}}<div class="row-labels tags mb-0">{{range .Labels}}<span class="tag is-rounded label-chip label-{{.Colour}}">{{.Name}}</span>{{end}}</div>{{end}}
+      {{if .Parent}}<div class="row-parent">parent: <a href="{{.ParentURL}}" hx-get="{{.ParentURL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true" title="{{.Parent.Title}}">#{{.Parent.Number}}</a></div>{{end}}
+      {{with .Waiting}}<div class="row-waiting">{{.}}</div>{{end}}
+      {{with .Holder}}<div class="row-held-by held-by">held by: {{template "holder" .}}</div>{{end}}
+      <time class="updated" datetime="{{iso .UpdatedAt}}">{{ago .UpdatedAt}}</time>
+    </li>
+    {{else}}<li class="empty">No Issues match.</li>{{end}}
+  </ul>
+  {{with .Frontier}}{{if .NotReady}}<h2 class="not-ready-heading mt-4">Tagged <code>ready-for-agent</code>, not ready</h2>
+  <ul class="not-ready">
+    {{range .NotReady}}
+    <li class="row status-{{.Status}}{{if .Selected}} is-selected{{end}}" id="row-{{.Number}}">
+      <div class="row-title"><a class="row-link" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true"><span class="num">#{{.Number}}</span> <span class="issue-title">{{.Title}}</span></a></div>
+      <div class="reason">{{if .Blockers}}blocked by {{range $i, $b := .Blockers}}{{if $i}}, {{end}}#{{$b}}{{end}}{{else if .Waiting}}{{.Waiting}}{{else if .Holder}}held by {{.Holder.Short}}{{else}}claimed{{end}}</div>
+    </li>
+    {{end}}
+  </ul>{{end}}{{end}}
+</section>{{end}}
+
+{{define "issue-pane"}}<article class="issue" id="issue-pane" aria-label="Issue"{{with .Issue}} data-live hx-get="{{.Self}}" hx-trigger="sse:issue-{{.Number}}, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML"{{end}}>
+{{with .Issue}}
+  <header>
+    <h1 class="title is-4 mb-3"><span class="num">#{{.Number}}</span> {{.Title}}</h1>
+    <div class="tabs issue-tabs mb-3"><ul role="tablist">{{range .Tabs}}<li role="tab" aria-selected="{{.Active}}"{{if .Active}} class="is-active"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true">{{.Name}}</a></li>{{end}}</ul></div>
+  </header>
+  {{if eq .Tab "board"}}{{template "board" .}}{{else if eq .Tab "decided"}}{{template "decided" .}}{{else if eq .Tab "history"}}{{template "history" .}}{{else}}
+  <dl class="props">
+    <dt>State</dt><dd class="state">{{.State}}{{if eq .Kind "map"}} (Map){{end}} · {{.Status}}</dd>
+    <dt>Assignee</dt><dd class="assignee">{{if .Assignee}}{{.Assignee}}{{else}}unassigned{{end}}</dd>
+    {{with .Holder}}<dt>Held by</dt><dd class="held-by">{{template "holder" .}}</dd>{{end}}
+    <dt>Labels</dt><dd class="issue-labels">{{range .Labels}}<span class="tag is-rounded label-chip label-{{.Colour}}">{{.Name}}</span> {{else}}none{{end}}</dd>
+    <dt>Parent</dt><dd class="parent">{{with .Parent}}{{template "ref" .}}{{else}}none{{end}}</dd>
+    <dt>Blocked by</dt><dd class="blockers">{{range .Blockers}}{{template "ref" .}} {{else}}none{{end}}</dd>
+    {{with .Waiting}}<dt>Waiting on</dt><dd class="open-children">{{.}}</dd>
+    {{end}}<dt>Blocks</dt><dd class="blocks">{{range .Blocks}}{{template "ref" .}} {{else}}none{{end}}</dd>
+    <dt>Children</dt><dd class="children">{{range .Children}}{{template "ref" .}} {{else}}none{{end}}</dd>
+    <dt>Version</dt><dd class="version">{{.Version}}</dd>
+  </dl>
+  <div class="body content">{{.Body}}</div>
+  <section class="comments" aria-label="Discussion">
+    <h2 class="title is-6">Discussion</h2>
+    {{range .Comments}}
+    <div class="comment" id="comment-{{.ID}}">
+      <p class="byline is-size-7 has-text-grey mb-1"><strong>{{.Author}}</strong> <a href="#comment-{{.ID}}"><time datetime="{{iso .CreatedAt}}">{{time .CreatedAt}}</time></a></p>
+      <div class="comment-body content">{{.Body}}</div>
+    </div>
+    {{else}}<p class="empty">No comments yet.</p>{{end}}
+  </section>
+  {{end}}
+{{else}}
+  <p class="empty">Select an Issue to read it.</p>
+{{end}}
+</article>{{end}}
+
+{{define "ref"}}<a class="ref{{if .Closed}} closed{{end}}" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true">{{if .Closed}}<s>#{{.Number}} {{.Title}}</s>{{else}}#{{.Number}} {{.Title}}{{end}}</a>{{end}}

@@ -25,8 +25,12 @@ import (
 	"github.com/HellRok/loom/internal/store"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.html templates/prototype-bulma
 var templateFS embed.FS
+
+// PROTOTYPE (Bulma look): the variants the switcher cycles through. "0" is
+// today's UI; the others overlay templates/prototype-bulma/<v>/ on it.
+var protoVariants = []string{"0", "a", "b", "c"}
 
 //go:embed static
 var staticFS embed.FS
@@ -87,6 +91,7 @@ type Deps struct {
 type server struct {
 	Deps
 	pages  map[string]*template.Template
+	proto  map[string]map[string]*template.Template
 	now    func() time.Time
 	broker *broker
 }
@@ -104,7 +109,11 @@ func Register(mux *http.ServeMux, d Deps) (closeStreams func()) {
 		d.Logger = slog.New(slog.DiscardHandler)
 	}
 	s := &server{Deps: d, now: time.Now}
-	s.pages = loadPages(s)
+	s.pages = loadPages(s, "")
+	s.proto = map[string]map[string]*template.Template{}
+	for _, v := range protoVariants[1:] {
+		s.proto[v] = loadPages(s, v)
+	}
 	s.broker = newBroker()
 	d.Store.OnChange(s.broker.publish)
 	static, err := fs.Sub(staticFS, "static")
@@ -163,7 +172,7 @@ func staticHandler(next http.Handler) http.Handler {
 	})
 }
 
-func loadPages(s *server) map[string]*template.Template {
+func loadPages(s *server, variant string) map[string]*template.Template {
 	funcs := template.FuncMap{
 		"ago":          s.ago,
 		"time":         func(t time.Time) string { return t.Local().Format("2006-01-02 15:04") },
@@ -171,10 +180,22 @@ func loadPages(s *server) map[string]*template.Template {
 		"shortSession": shortSession,
 		"iso":          func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 	}
-	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
+	// PROTOTYPE: a variant's own copy of a template wins over the shared one.
+	path := func(name string) string {
+		if variant != "" {
+			for _, dir := range []string{variant, "shared"} {
+				p := "templates/prototype-bulma/" + dir + "/" + name + ".html"
+				if _, err := fs.Stat(templateFS, p); err == nil {
+					return p
+				}
+			}
+		}
+		return "templates/" + name + ".html"
+	}
+	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, path("layout")))
 	pages := map[string]*template.Template{}
 	for _, name := range []string{"home", "project", "notfound", "sessions", "session", "glossary"} {
-		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html", "templates/tabs.html", "templates/nav.html"))
+		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, path(name), path("tabs"), path("nav")))
 	}
 	return pages
 }
@@ -201,6 +222,16 @@ func (s *server) ago(t time.Time) string {
 // asked for.
 func (s *server) render(w http.ResponseWriter, r *http.Request, status int, page string, data any) {
 	tmpl := s.pages[page]
+	// PROTOTYPE: ?variant= picks a look and remembers it in a cookie.
+	variant := r.URL.Query().Get("variant")
+	if variant != "" {
+		http.SetCookie(w, &http.Cookie{Name: "loom-variant", Value: variant, Path: "/"})
+	} else if c, err := r.Cookie("loom-variant"); err == nil {
+		variant = c.Value
+	}
+	if p, ok := s.proto[variant]; ok {
+		tmpl = p[page]
+	}
 	name := "page"
 	// A history restore after a cache miss wants the whole page back.
 	if r.Header.Get("HX-Request") != "" && r.Header.Get("HX-History-Restore-Request") == "" {

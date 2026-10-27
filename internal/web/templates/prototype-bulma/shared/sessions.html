@@ -1,0 +1,19 @@
+{{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/events">{{template "sessions-pane" .}}</div>{{end}}
+
+{{define "sessions-pane"}}<section class="sessions section" id="sessions-pane" data-live hx-get="/sessions" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+<div class="container is-max-desktop">
+<h1 class="title">Sessions</h1>
+<table class="session-list table is-fullwidth is-hoverable">
+  <thead><tr><th>Session</th><th>Last seen</th><th>First seen</th></tr></thead>
+  <tbody>
+  {{range .Sessions}}
+  <tr>
+    <td>{{template "holder" .HolderView}}</td>
+    <td><time datetime="{{iso .LastSeen}}">{{ago .LastSeen}}</time> <span class="muted">({{.Idle}})</span></td>
+    <td><time datetime="{{iso .FirstSeen}}">{{time .FirstSeen}}</time></td>
+  </tr>
+  {{else}}<tr class="empty"><td colspan="3">No Sessions yet.</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+</section>{{end}}

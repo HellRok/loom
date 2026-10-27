@@ -1,0 +1,16 @@
+{{define "nav"}}<nav class="nav menu" id="nav" aria-label="Project navigation" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+  <div class="field">
+    <div class="control is-expanded"><div class="select is-small is-fullwidth"><select class="switcher" aria-label="Project" onchange="htmx.ajax('GET', this.value, {target: '#main', swap: 'innerHTML'}).then(() => history.pushState({}, '', this.value))">
+      {{range .Switcher}}<option value="/{{.Slug}}"{{if .Active}} selected{{end}}>{{.Slug}} ({{.Open}})</option>{{end}}
+    </select></div></div>
+  </div>
+  <p class="menu-label">Views</p>
+  <ul class="views menu-list">
+    {{range .Views}}<li{{if .Active}} aria-current="true"{{end}}><a{{if .Active}} class="is-active"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}} <span class="count tag is-rounded is-small">{{.Count}}</span></a></li>{{end}}
+    {{if .Standalone}}<li{{if .GlossaryActive}} aria-current="page"{{end}} class="reference"><a{{if .GlossaryActive}} class="is-active"{{end}} href="/{{.Slug}}/glossary" hx-get="/{{.Slug}}/glossary" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">Glossary</a></li>{{end}}
+  </ul>
+  <p class="menu-label">Labels</p>
+  <div class="labels tags">
+    {{range .LabelLinks}}<a class="tag label-chip label-{{.Colour}}{{if .Active}} is-active{{end}}{{if .Zero}} zero{{end}}"{{if .Active}} aria-current="true"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}} <span class="count">{{.Count}}</span></a>{{end}}
+  </div>
+</nav>{{end}}

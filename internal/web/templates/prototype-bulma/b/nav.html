@@ -1,0 +1,21 @@
+{{define "nav"}}<nav class="nav" id="nav" aria-label="Project navigation" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+  <div class="panel is-small">
+  <p class="panel-heading">Projects</p>
+  <div class="switcher">
+    {{range .Switcher}}<a class="panel-block{{if .Active}} is-active{{end}}"{{if .Active}} aria-current="page"{{end}} href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}} <span class="count tag is-rounded">{{.Open}}</span></a>{{end}}
+  </div>
+  </div>
+  <div class="panel">
+  <p class="panel-heading">Views</p>
+  <div class="views">
+    {{range .Views}}<a class="panel-block{{if .Active}} is-active{{end}}"{{if .Active}} aria-current="true"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}} <span class="count tag is-rounded">{{.Count}}</span></a>{{end}}
+    {{if .Standalone}}<a class="reference panel-block{{if .GlossaryActive}} is-active{{end}}"{{if .GlossaryActive}} aria-current="page"{{end}} href="/{{.Slug}}/glossary" hx-get="/{{.Slug}}/glossary" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">Glossary</a>{{end}}
+  </div>
+  </div>
+  <div class="panel">
+  <p class="panel-heading">Labels</p>
+  <div class="labels">
+    {{range .LabelLinks}}<a class="panel-block{{if .Active}} is-active{{end}}{{if .Zero}} zero{{end}}"{{if .Active}} aria-current="true"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="tag label-chip label-{{.Colour}}">{{.Name}}</span> <span class="count tag is-rounded">{{.Count}}</span></a>{{end}}
+  </div>
+  </div>
+</nav>{{end}}

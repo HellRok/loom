@@ -1,0 +1,67 @@
+/* PROTOTYPE (Bulma look): what Bulma lacks, shared by every variant. */
+:root { --red: #d92d20; --orange: #e8710a; --yellow: #b7950b; --green: #2f9e44; --teal: #0f9d8a; --blue: #2457d6; --purple: #7e3ff2; --pink: #d6336c; }
+.label-red { --chip: var(--red); } .label-orange { --chip: var(--orange); } .label-yellow { --chip: var(--yellow); }
+.label-green { --chip: var(--green); } .label-teal { --chip: var(--teal); } .label-blue { --chip: var(--blue); }
+.label-purple { --chip: var(--purple); } .label-pink { --chip: var(--pink); }
+.label-chip { --chip: var(--bulma-text-weak); }
+
+.loom-navbar { border-bottom: 1px solid var(--bulma-border-weak); }
+.panes { display: grid; grid-template-columns: 15rem minmax(18rem, 26rem) 1fr; }
+.panes > * { padding: 0.75rem 1rem; border-right: 1px solid var(--bulma-border-weak); overflow-wrap: anywhere; min-width: 0; }
+.panes > :last-child { border-right: 0; }
+.panes > .glossary { grid-column: 2 / -1; }
+.panes > .glossary > * { max-width: 52rem; }
+
+.rows, .not-ready { list-style: none; margin: 0; padding: 0; }
+:is(.rows, .not-ready) .row { position: relative; }
+/* The title link's box covers the whole row, so a click anywhere opens the
+   Issue. The links in the meta lines sit above it. */
+.row-link { color: var(--bulma-text-strong); }
+.row-link::after { content: ""; position: absolute; inset: 0; }
+.row-parent a, .row-held-by a { position: relative; }
+.row .num, .issue h1 .num { color: var(--bulma-text-weak); font-variant-numeric: tabular-nums; }
+.row.status-closed .issue-title { color: var(--bulma-text-weak); }
+.row-parent, .row-waiting, .reason, .row-held-by, .updated { color: var(--bulma-text-weak); font-size: 0.8em; }
+.updated { display: block; }
+.not-ready { opacity: 0.65; }
+.zero { opacity: 0.5; }
+.ref.closed { color: var(--bulma-text-weak); }
+.comment:target { outline: 2px solid var(--bulma-link); }
+.session-link { font-family: var(--bulma-code-family); }
+.empty, .muted, .idle { color: var(--bulma-text-weak); }
+.held, .events { list-style: none; padding: 0; }
+.held li, .events li { padding: 0.2rem 0; border-bottom: 1px solid var(--bulma-border-weak); }
+.map { margin: 0.6rem 0 0; }
+.map-progress { display: flex; align-items: center; gap: 0.5rem; }
+.map-progress .progress { width: 10rem; margin: 0 !important; }
+.next a { margin-right: 0.8em; }
+
+.diff { font-family: var(--bulma-code-family); font-size: 0.85em; margin-top: 0.4rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff del, .diff ins { display: block; text-decoration: none; }
+.diff del::before { content: "- "; }
+.diff ins::before { content: "+ "; }
+.diff del { background: color-mix(in srgb, var(--red) 18%, transparent); }
+.diff ins { background: color-mix(in srgb, var(--green) 18%, transparent); }
+.diff .same { color: var(--bulma-text-weak); }
+.diff .same::before { content: "  "; }
+.history { list-style: none; margin: 0; padding: 0; }
+.event { border-bottom: 1px solid var(--bulma-border-weak); padding: 0.4rem 0; }
+.event .session, .event time { color: var(--bulma-text-weak); font-size: 0.85em; }
+
+.board { display: grid; grid-template-columns: repeat(3, minmax(10rem, 1fr)); gap: 0.75rem; }
+.board-column { min-width: 0; }
+
+/* Wide screens: the panes fill the viewport below the header and each scrolls
+   on its own, so the page itself never does. */
+@media not all and (max-width: 54rem) {
+  body:has(.panes) { height: 100vh; display: flex; flex-direction: column; }
+  body:has(.panes) > main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .panes { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .panes > * { overflow-y: auto; }
+}
+@media (max-width: 54rem) {
+  .board { grid-template-columns: 1fr; }
+  .panes { display: block; }
+  .panes > * { border-right: 0; border-bottom: 1px solid var(--bulma-border-weak); }
+}
+.row .num, .board-card .num { white-space: nowrap; }

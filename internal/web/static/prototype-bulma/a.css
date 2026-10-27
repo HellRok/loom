@@ -1,0 +1,19 @@
+/* PROTOTYPE variant A: quiet Bulma defaults, outlined chips. */
+.nav { background: var(--bulma-scheme-main-bis); }
+.menu-list a { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.25em 0.5em; }
+.count { color: var(--bulma-text-weak); font-size: 0.8em; }
+.menu-list a.is-active .count { color: inherit; }
+.label-chip { background: transparent; color: var(--chip); border: 1px solid currentColor; }
+:is(.rows, .not-ready) .row { padding: 0.4rem 0.35rem; border-bottom: 1px solid var(--bulma-border-weak); }
+:is(.rows, .not-ready) .row.is-selected { background: var(--bulma-background); }
+.props { display: grid; grid-template-columns: 7rem 1fr; gap: 0.2rem 0.75rem; margin: 0 0 1rem; }
+.props dt { color: var(--bulma-text-weak); }
+.comments { border-top: 1px solid var(--bulma-border-weak); padding-top: 0.75rem; margin-top: 1rem; }
+.comment { border: 1px solid var(--bulma-border-weak); border-radius: var(--bulma-radius); padding: 0.5rem 0.75rem; margin: 0.5rem 0; }
+.board-column { background: var(--bulma-scheme-main-bis); border-radius: var(--bulma-radius-large); padding: 0.5rem; }
+.board-card { padding: 0.5rem 0.6rem; margin-bottom: 0.5rem !important; }
+.board-card > a { display: block; color: var(--bulma-text-strong); }
+.board-card .issue-title { display: block; margin: 0.2rem 0; }
+.board-card .num, .board-card .assignee, .board-card .blockers, .board-card .held-by { color: var(--bulma-text-weak); font-size: 0.85em; }
+.decision { border-bottom: 1px solid var(--bulma-border-weak); padding: 0.4rem 0; }
+.decision .gist { margin: 0.2rem 0 0 1rem; color: var(--bulma-text-weak); }

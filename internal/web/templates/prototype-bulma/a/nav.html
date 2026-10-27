@@ -1,0 +1,18 @@
+{{define "nav"}}<nav class="nav menu" id="nav" aria-label="Project navigation" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+  <p class="menu-label">Projects</p>
+  <ul class="switcher menu-list">
+    {{range .Switcher}}<li{{if .Active}} aria-current="page"{{end}}><a{{if .Active}} class="is-active"{{end}} href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}} <span class="count">{{.Open}}</span></a></li>{{end}}
+  </ul>
+  <p class="menu-label">Views</p>
+  <ul class="views menu-list">
+    {{range .Views}}<li{{if .Active}} aria-current="true"{{end}}><a{{if .Active}} class="is-active"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}} <span class="count">{{.Count}}</span></a></li>{{end}}
+  </ul>
+  {{if .Standalone}}<p class="menu-label">Reference</p>
+  <ul class="reference menu-list">
+    <li{{if .GlossaryActive}} aria-current="page"{{end}}><a{{if .GlossaryActive}} class="is-active"{{end}} href="/{{.Slug}}/glossary" hx-get="/{{.Slug}}/glossary" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">Glossary</a></li>
+  </ul>
+  {{end}}<p class="menu-label">Labels</p>
+  <ul class="labels menu-list">
+    {{range .LabelLinks}}<li{{if .Zero}} class="zero"{{end}}{{if .Active}} aria-current="true"{{end}}><a{{if .Active}} class="is-active"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="tag is-rounded label-chip label-{{.Colour}}">{{.Name}}</span> <span class="count">{{.Count}}</span></a></li>{{end}}
+  </ul>
+</nav>{{end}}

@@ -1,0 +1,40 @@
+{{define "board"}}<div class="board">
+  {{template "column" (colData "frontier" "Frontier" .Board.Frontier)}}
+  {{template "column" (colData "claimed" "Claimed" .Board.Claimed)}}
+  {{template "column" (colData "blocked" "Blocked" .Board.Blocked)}}
+</div>{{end}}
+
+{{define "column"}}<section class="board-column {{.Key}}" aria-label="{{.Name}}">
+  <h2 class="column-heading title is-6 mb-2">{{.Name}} <span class="count tag is-rounded is-small">{{len .Cards}}</span></h2>
+  {{range .Cards}}
+  <div class="board-card card mb-3">
+    <header class="card-header"><a class="card-header-title" href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true"><span class="issue-title">{{.Title}}</span></a><span class="card-header-icon num">#{{.Number}}</span></header>
+    <div class="card-content">
+      {{if .Type}}<span class="type tag is-small is-link">{{.Type}}</span>{{end}}
+      {{with .Holder}}<div class="held-by">held by: {{template "holder" .}}</div>{{end}}
+      {{if .Blockers}}<div class="blockers">blocked by {{range .Blockers}}{{template "ref" .}} {{end}}</div>{{end}}
+    </div>
+    {{if .Assignee}}<footer class="card-footer"><span class="card-footer-item assignee">{{.Assignee}}</span></footer>{{end}}
+  </div>
+  {{else}}<p class="empty">Nothing here.</p>{{end}}
+</section>{{end}}
+
+{{define "decided"}}<section class="decided" aria-label="Decided">
+  {{range .Decided}}
+  <div class="decision card mb-2"><div class="card-content">
+    <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#issue-pane" hx-swap="outerHTML" hx-push-url="true"><span class="num">#{{.Number}}</span> <span class="issue-title">{{.Title}}</span></a>
+    {{if .Gist}}<p class="gist">{{.Gist}}</p>{{end}}
+  </div></div>
+  {{else}}<p class="empty">Nothing decided yet.</p>{{end}}
+</section>{{end}}
+
+{{define "history"}}<ol class="history" aria-label="History">
+  {{range .History}}
+  <li class="event" data-type="{{.Type}}">
+    <p class="what"><strong class="actor">{{.Actor}}</strong>{{if .Session}} <span class="session" title="{{.Session}}">{{shortSession .Session}}</span>{{end}} {{.Summary}}{{with .Ref}} {{template "ref" .}}{{end}}{{with .CommentURL}} <a href="{{.}}">comment</a>{{end}} <time datetime="{{iso .At}}" title="{{time .At}}">{{ago .At}}</time></p>
+    {{if .Diff}}<details><summary>Show changes</summary>
+      <div class="diff">{{range .Diff}}{{if .Removed}}<del>{{.Text}}</del>{{else if .Added}}<ins>{{.Text}}</ins>{{else}}<div class="same">{{.Text}}</div>{{end}}{{end}}</div>
+    </details>{{end}}
+  </li>
+  {{end}}
+</ol>{{end}}
