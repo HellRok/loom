@@ -32,12 +32,12 @@ func TestIssueWithOpenChildrenShowsAsBlocked(t *testing.T) {
 
 	// The Issue pane says so apart from the explicit Blockers.
 	l.Do(chromedp.Navigate(l.URL("/demo/issues/1")))
-	poll(`document.querySelector("#issue-pane dd.open-children")?.textContent ?? ""`, "waiting on 1 open child")
-	poll(`document.querySelector("#issue-pane dd.blockers").textContent.trim()`, "none")
+	poll(`document.querySelector("#issue-pane .open-children")?.textContent ?? ""`, "waiting on 1 open child")
+	poll(`document.querySelector("#issue-pane .blockers").textContent.trim()`, "none")
 
 	// Closing the last child lifts it, live.
 	l.Call("close", map[string]any{"ref": "#2"})
-	poll(`document.querySelector("#issue-pane dd.open-children")?.textContent ?? ""`, "")
+	poll(`document.querySelector("#issue-pane .open-children")?.textContent ?? ""`, "")
 	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
 	poll(rowStatus(1), "status-open")
 }

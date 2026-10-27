@@ -90,7 +90,7 @@ func both(t *testing.T, f *fixture, path string, check func(t *testing.T, doc *g
 }
 
 func tabLabels(doc *goquery.Document) string {
-	return strings.Join(doc.Find("#issue-pane .tabs li").Map(func(_ int, s *goquery.Selection) string {
+	return strings.Join(doc.Find("#issue-pane .issue-tabs li").Map(func(_ int, s *goquery.Selection) string {
 		return strings.Fields(s.Text())[0]
 	}), ",")
 }
@@ -102,21 +102,21 @@ func TestMapBoard(t *testing.T) {
 		if got := tabLabels(doc); got != "Board,Decided,Overview,History" {
 			t.Errorf("tabs = %q", got)
 		}
-		if got := text(doc, "#issue-pane .tabs li.active"); got != "Board" {
+		if got := text(doc, "#issue-pane .issue-tabs li.is-active"); got != "Board" {
 			t.Errorf("active tab = %q", got)
 		}
-		expect(t, doc, ".board .column", 3)
-		cols := doc.Find(".board .column").Map(func(_ int, s *goquery.Selection) string {
+		expect(t, doc, ".board .board-column", 3)
+		cols := doc.Find(".board .board-column").Map(func(_ int, s *goquery.Selection) string {
 			return strings.TrimSpace(s.Find("h2").Contents().First().Text())
 		})
 		if strings.Join(cols, ",") != "Frontier,Claimed,Blocked" {
 			t.Errorf("columns = %v", cols)
 		}
-		expect(t, doc, ".column.frontier .card", 1)
-		expect(t, doc, ".column.claimed .card", 1)
-		expect(t, doc, ".column.blocked .card", 1)
-		fr := doc.Find(".column.frontier .card")
-		if got := text(doc, ".column.frontier .card .title"); got != "Pick a database" {
+		expect(t, doc, ".board-column.frontier .board-card", 1)
+		expect(t, doc, ".board-column.claimed .board-card", 1)
+		expect(t, doc, ".board-column.blocked .board-card", 1)
+		fr := doc.Find(".board-column.frontier .board-card")
+		if got := text(doc, ".board-column.frontier .board-card .issue-title"); got != "Pick a database" {
 			t.Errorf("frontier card title = %q", got)
 		}
 		if got := fr.Find(".type").Text(); got != "wayfinder:research" {
@@ -128,7 +128,7 @@ func TestMapBoard(t *testing.T) {
 		if got := fr.Find("a").AttrOr("href", ""); got != "/loom/issues/2" {
 			t.Errorf("card href = %q", got)
 		}
-		cl := doc.Find(".column.claimed .card")
+		cl := doc.Find(".board-column.claimed .board-card")
 		link := cl.Find(".held-by a.session-link")
 		if got := link.Text(); got != "aim-9999" {
 			t.Errorf("claimed card session link = %q", got)
@@ -139,21 +139,21 @@ func TestMapBoard(t *testing.T) {
 		if got := link.AttrOr("title", ""); got != "abcdefgh-session-claim-9999" {
 			t.Errorf("claimed card session title = %q", got)
 		}
-		expect(t, doc, ".column.frontier .card .held-by", 0)
+		expect(t, doc, ".board-column.frontier .board-card .held-by", 0)
 		if got := cl.Find(".assignee").Text(); got != "Agent Smith" {
 			t.Errorf("claimed assignee = %q", got)
 		}
 		if got := cl.Find(".num").Text(); got != "#3" {
 			t.Errorf("claimed num = %q", got)
 		}
-		bl := doc.Find(".column.blocked .card")
+		bl := doc.Find(".board-column.blocked .board-card")
 		if got := bl.Find(".num").Text(); got != "#4" {
 			t.Errorf("blocked num = %q", got)
 		}
 		if got := bl.Find(".blockers").Text(); !strings.Contains(got, "#2") {
 			t.Errorf("blocked card blockers = %q", got)
 		}
-		expect(t, doc, ".board .card.closed", 0)
+		expect(t, doc, ".board .board-card.is-closed", 0)
 	}
 	both(t, f, "/loom/issues/1", check)
 	both(t, f, "/loom/issues/1?tab=board", check)
@@ -162,7 +162,7 @@ func TestMapBoard(t *testing.T) {
 func TestMapDecided(t *testing.T) {
 	f := seedMap(t)
 	both(t, f, "/loom/issues/1?tab=decided", func(t *testing.T, doc *goquery.Document) {
-		if got := text(doc, "#issue-pane .tabs li.active"); got != "Decided" {
+		if got := text(doc, "#issue-pane .issue-tabs li.is-active"); got != "Decided" {
 			t.Errorf("active tab = %q", got)
 		}
 		expect(t, doc, ".board", 0)
@@ -171,7 +171,7 @@ func TestMapDecided(t *testing.T) {
 		if got := d.Find(".num").Text(); got != "#5" {
 			t.Errorf("num = %q", got)
 		}
-		if got := d.Find(".title").Text(); got != "Choose a router" {
+		if got := d.Find(".issue-title").Text(); got != "Choose a router" {
 			t.Errorf("title = %q", got)
 		}
 		if got := d.Find(".gist").Text(); got != "Use net/http." {
@@ -183,11 +183,11 @@ func TestMapDecided(t *testing.T) {
 func TestMapOverviewTab(t *testing.T) {
 	f := seedMap(t)
 	both(t, f, "/loom/issues/1?tab=overview", func(t *testing.T, doc *goquery.Document) {
-		if got := text(doc, "#issue-pane .tabs li.active"); got != "Overview" {
+		if got := text(doc, "#issue-pane .issue-tabs li.is-active"); got != "Overview" {
 			t.Errorf("active tab = %q", got)
 		}
 		expect(t, doc, ".board", 0)
-		if got := text(doc, "dd.version"); got != "1" {
+		if got := text(doc, "#issue-pane .version"); got != "1" {
 			t.Errorf("version = %q", got)
 		}
 	})
@@ -197,14 +197,14 @@ func TestMapOverviewTab(t *testing.T) {
 func TestStoreGraphRelations(t *testing.T) {
 	f := seedMap(t)
 	_, doc := f.get("/loom/issues/2?tab=overview", "")
-	if got := text(doc, "dd.blocks"); got != "#4 Build the board" {
+	if got := text(doc, "#issue-pane .blocks"); got != "#4 Build the board" {
 		t.Errorf("blocks = %q", got)
 	}
-	if got := text(doc, "dd.parent"); got != "#1 Ship v1" {
+	if got := text(doc, "#issue-pane .parent"); got != "#1 Ship v1" {
 		t.Errorf("parent = %q", got)
 	}
 	_, doc = f.get("/loom/issues/4?tab=overview", "")
-	if got := text(doc, "dd.blockers"); got != "#2 Pick a database" {
+	if got := text(doc, "#issue-pane .blockers"); got != "#2 Pick a database" {
 		t.Errorf("blockers = %q", got)
 	}
 }
@@ -215,13 +215,13 @@ func TestIssueTabs(t *testing.T) {
 		if got := tabLabels(doc); got != "Overview,History" {
 			t.Errorf("tabs = %q", got)
 		}
-		if got := text(doc, "#issue-pane .tabs li.active"); got != "Overview" {
+		if got := text(doc, "#issue-pane .issue-tabs li.is-active"); got != "Overview" {
 			t.Errorf("active tab = %q", got)
 		}
 	})
 	// A Map-only tab on a plain Issue falls back to its default.
 	both(t, f, "/loom/issues/6?tab=board", func(t *testing.T, doc *goquery.Document) {
-		if got := text(doc, "#issue-pane .tabs li.active"); got != "Overview" {
+		if got := text(doc, "#issue-pane .issue-tabs li.is-active"); got != "Overview" {
 			t.Errorf("active tab = %q", got)
 		}
 		expect(t, doc, ".board", 0)
@@ -229,7 +229,7 @@ func TestIssueTabs(t *testing.T) {
 	// Tab links keep the list filters and select the tab.
 	_, doc := f.get("/loom/issues/6?view=closed", "")
 	var hrefs []string
-	doc.Find("#issue-pane .tabs a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
+	doc.Find("#issue-pane .issue-tabs a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
 	if strings.Join(hrefs, " ") != "/loom/issues/6?view=closed /loom/issues/6?tab=history&view=closed" {
 		t.Errorf("tab links = %v", hrefs)
 	}
@@ -239,7 +239,7 @@ func TestHistory(t *testing.T) {
 	f := seedMap(t)
 	check := func(t *testing.T, doc *goquery.Document) {
 		t.Helper()
-		if got := text(doc, "#issue-pane .tabs li.active"); got != "History" {
+		if got := text(doc, "#issue-pane .issue-tabs li.is-active"); got != "History" {
 			t.Errorf("active tab = %q", got)
 		}
 		evs := doc.Find(".history .event")

@@ -44,7 +44,7 @@ func TestClickingARowMovesTheSelectedHighlight(t *testing.T) {
 	// selected waits for exactly the row with this id to be the selected one.
 	selected := func(want string) {
 		t.Helper()
-		pollUntil(l, fmt.Sprintf(`[...document.querySelectorAll(".row.selected")].map(r => r.id).join() === %q`, want))
+		pollUntil(l, fmt.Sprintf(`[...document.querySelectorAll(".row.is-selected")].map(r => r.id).join() === %q`, want))
 	}
 
 	l.Do(chromedp.Navigate(l.URL("/demo/issues/1?view=open")))
@@ -96,7 +96,7 @@ func measureRow(l *Loom, id string) rowBox {
 			ContentTop: Math.min(...kids.map(k => k.top)), ContentBottom: Math.max(...kids.map(k => k.bottom)),
 			Background: cs.backgroundColor,
 			BorderBottom: cs.borderBottomStyle === "none" ? 0 : parseFloat(cs.borderBottomWidth),
-			DescendantBorders: [...li.querySelectorAll("*:not(.label)")].filter(e => {
+			DescendantBorders: [...li.querySelectorAll("*:not(.label-chip)")].filter(e => {
 				const s = getComputedStyle(e);
 				return s.borderBottomStyle !== "none" && parseFloat(s.borderBottomWidth) > 0;
 			}).length,
@@ -110,7 +110,7 @@ func TestSelectedRowHighlightCoversTheWholeRow(t *testing.T) {
 	seedFullRow(l)
 	l.Do(chromedp.EmulateViewport(1280, 720))
 	l.Do(chromedp.Navigate(l.URL("/demo/issues/2?view=open")))
-	pollUntil(l, `document.querySelector("#list-pane #row-2.selected")`)
+	pollUntil(l, `document.querySelector("#list-pane #row-2.is-selected")`)
 
 	selected, other := measureRow(l, "row-2"), measureRow(l, "row-1")
 	const transparent = "rgba(0, 0, 0, 0)"
@@ -135,7 +135,7 @@ func TestRowHasASingleDivider(t *testing.T) {
 	seedFullRow(l)
 	l.Do(chromedp.EmulateViewport(1280, 720))
 	l.Do(chromedp.Navigate(l.URL("/demo/issues/2?view=open")))
-	pollUntil(l, `document.querySelector("#list-pane #row-2.selected")`)
+	pollUntil(l, `document.querySelector("#list-pane #row-2.is-selected")`)
 
 	for _, id := range []string{"row-1", "row-2"} {
 		row := measureRow(l, id)
@@ -161,12 +161,12 @@ func TestClickingARowsParentLinkOpensTheParent(t *testing.T) {
 	seedFullRow(l)
 	l.Do(chromedp.EmulateViewport(1280, 720))
 	l.Do(chromedp.Navigate(l.URL("/demo/issues/3?view=open")))
-	pollUntil(l, `document.querySelector("#list-pane #row-3.selected")`)
+	pollUntil(l, `document.querySelector("#list-pane #row-3.is-selected")`)
 
 	// #2's row is another row's neighbour, so the click can only hit the link.
 	l.Do(chromedp.Click(chromedp.CSS("#row-2 .row-parent a")))
 	pollUntil(l, `location.pathname === "/demo/issues/1"`)
-	pollUntil(l, `document.querySelector("#list-pane #row-1.selected")`)
+	pollUntil(l, `document.querySelector("#list-pane #row-1.is-selected")`)
 }
 
 func TestClickingTheTitleLineOrBlankSpaceOpensTheRowsIssue(t *testing.T) {
@@ -177,14 +177,14 @@ func TestClickingTheTitleLineOrBlankSpaceOpensTheRowsIssue(t *testing.T) {
 	open := func(name string, click func()) {
 		t.Helper()
 		l.Do(chromedp.Navigate(l.URL("/demo/issues/1?view=open")))
-		pollUntil(l, `document.querySelector("#list-pane #row-1.selected")`)
+		pollUntil(l, `document.querySelector("#list-pane #row-1.is-selected")`)
 		click()
 		pollUntil(l, `location.pathname === "/demo/issues/2"`)
-		pollUntil(l, `document.querySelector("#list-pane #row-2.selected")`)
+		pollUntil(l, `document.querySelector("#list-pane #row-2.is-selected")`)
 		t.Logf("%s opened #2", name)
 	}
 	open("the title", func() {
-		l.Do(chromedp.Click(chromedp.CSS("#row-2 .row-link .title")))
+		l.Do(chromedp.Click(chromedp.CSS("#row-2 .row-link .issue-title")))
 	})
 	open("blank space", func() {
 		// Beside the title, past the end of every line.

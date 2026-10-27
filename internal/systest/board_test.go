@@ -16,7 +16,7 @@ func TestBoardCardLinksToTheClaimingSession(t *testing.T) {
 	l.Call("claim", map[string]any{"ref": "#2"})
 
 	l.Do(chromedp.Navigate(l.URL("/demo/issues/1?tab=board")))
-	l.Do(chromedp.Click(chromedp.CSS(".column.claimed .card .session-link")))
+	l.Do(chromedp.Click(chromedp.CSS(".board-column.claimed .board-card .session-link")))
 
 	pollUntil(l, `location.pathname.startsWith("/sessions/")`)
 	if got := Get(l, chromedp.Evaluate[string](`location.pathname`)); !strings.HasPrefix(got, "/sessions/") || got == "/sessions/" {

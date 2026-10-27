@@ -78,7 +78,7 @@ func TestListRowStacksMetaLines(t *testing.T) {
 	})
 
 	t.Run("labels are pills on their own line", func(t *testing.T) {
-		expect(t, doc, "#row-2 .row-labels .label", 2)
+		expect(t, doc, "#row-2 .row-labels .label-chip", 2)
 		if got := text(doc, "#row-2 .row-labels"); got != "needs-triage ready-for-agent" {
 			t.Errorf("labels line = %q", got)
 		}
@@ -129,5 +129,5 @@ func TestListRowOpensIssueFromAnywhere(t *testing.T) {
 	expect(t, doc, "#row-2 a a", 0)
 	// The selection highlight is on the row, not just the title link.
 	_, doc = f.get("/loom/issues/2?view=open", "")
-	expect(t, doc, "#list-pane #row-2.selected", 1)
+	expect(t, doc, "#list-pane #row-2.is-selected", 1)
 }

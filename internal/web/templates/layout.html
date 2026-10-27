@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath d=%27M3 2v12h10v-2H5V2z%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/bulma-1.0.4.min.css">
 <link rel="stylesheet" href="/static/loom.css">
 <script src="/static/htmx-2.0.4.min.js" defer></script>
 <script src="/static/htmx-ext-sse-2.2.3.js" defer></script>
@@ -12,7 +13,7 @@
 <script src="/static/loom.js" defer></script>
 </head>
 <body>
-<header class="top"><a href="/" hx-get="/" hx-target="#main" hx-push-url="true" class="brand">Loom</a> <a href="/sessions" hx-get="/sessions" hx-target="#main" hx-push-url="true" class="top-link">Sessions</a></header>
+<nav class="navbar is-primary loom-navbar top" aria-label="main navigation"><div class="navbar-brand"><a href="/" hx-get="/" hx-target="#main" hx-push-url="true" class="navbar-item brand has-text-weight-bold is-size-5">Loom</a><a href="/sessions" hx-get="/sessions" hx-target="#main" hx-push-url="true" class="navbar-item top-link">Sessions</a></div></nav>
 <main id="main">{{template "main" .}}</main>
 </body>
 </html>

@@ -63,14 +63,14 @@ func TestClaimsShowHolderSession(t *testing.T) {
 
 	t.Run("issue overview", func(t *testing.T) {
 		_, doc := f.get("/loom/issues/3", "issue-pane")
-		if got := doc.Find("dd.held-by a.session-link").Text(); got != "11112222" {
+		if got := doc.Find("#issue-pane .held-by a.session-link").Text(); got != "11112222" {
 			t.Errorf("holder = %q", got)
 		}
-		if got := text(doc, "dd.held-by .idle"); got != "idle <1m" {
+		if got := text(doc, "#issue-pane .held-by .idle"); got != "idle <1m" {
 			t.Errorf("idle = %q", got)
 		}
 		_, doc = f.get("/loom/issues/2", "issue-pane")
-		expect(t, doc, "dd.held-by", 0)
+		expect(t, doc, "#issue-pane .held-by", 0)
 	})
 }
 

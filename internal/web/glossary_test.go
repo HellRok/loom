@@ -197,7 +197,7 @@ func TestGlossaryPageKeepsTheNavigationBesideIt(t *testing.T) {
 	expect(t, doc, ".panes > #glossary-pane", 1)
 	expect(t, doc, "#list-pane, #issue-pane", 0)
 	_, project := f.get("/loom", "")
-	if got, want := doc.Find("#nav .views li").Length(), project.Find("#nav .views li").Length(); got == 0 || got != want {
+	if got, want := doc.Find("#nav .views .nav-link").Length(), project.Find("#nav .views .nav-link").Length(); got == 0 || got != want {
 		t.Errorf("Views = %d, want the Project page's %d", got, want)
 	}
 	if got, want := doc.Find("#nav .labels").Text(), project.Find("#nav .labels").Text(); got == "" || got != want {
@@ -205,9 +205,9 @@ func TestGlossaryPageKeepsTheNavigationBesideIt(t *testing.T) {
 	}
 
 	// The Glossary is the current page, not a View.
-	expect(t, doc, "#nav .views li.active", 0)
-	expect(t, doc, "#nav .reference li.active a[href='/loom/glossary']", 1)
-	expect(t, doc, "#nav .switcher li.active", 1)
+	expect(t, doc, "#nav .views .nav-link.is-active:not(.reference)", 0)
+	expect(t, doc, "#nav a.reference.is-active[href='/loom/glossary']", 1)
+	expect(t, doc, "#nav .switcher .nav-link.is-active", 1)
 
 	// The navigation refreshes from the Glossary page's address.
 	rec, frag := f.get("/loom/glossary", "nav")
@@ -216,11 +216,11 @@ func TestGlossaryPageKeepsTheNavigationBesideIt(t *testing.T) {
 	}
 	expect(t, frag, "nav#nav", 1)
 	expect(t, frag, "#glossary-pane", 0)
-	expect(t, frag, "#nav .reference li.active", 1)
-	expect(t, frag, "#nav .views li.active", 0)
+	expect(t, frag, "#nav .reference.is-active", 1)
+	expect(t, frag, "#nav .views .nav-link.is-active:not(.reference)", 0)
 
 	// A Project page marks a View, not the Glossary.
 	_, doc = f.get("/loom", "")
-	expect(t, doc, "#nav .views li.active", 1)
-	expect(t, doc, "#nav .reference li.active", 0)
+	expect(t, doc, "#nav .views .nav-link.is-active", 1)
+	expect(t, doc, "#nav .reference.is-active", 0)
 }

@@ -19,7 +19,7 @@ func TestGlossaryFillsTheSpaceBesideTheNavigation(t *testing.T) {
 
 	l.Do(chromedp.EmulateViewport(1280, 720))
 	l.Do(chromedp.Navigate(l.URL("/demo?view=open")))
-	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .reference a").click()`))
+	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav a.reference").click()`))
 	pollUntil(l, `location.pathname === "/demo/glossary"`)
 	pollUntil(l, `document.querySelector("#glossary-pane")`)
 
@@ -62,6 +62,6 @@ func TestGlossaryFillsTheSpaceBesideTheNavigation(t *testing.T) {
 	}
 
 	// The navigation still gets back to the Issues.
-	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .views li:nth-child(3) a").click()`))
+	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .views .nav-link:nth-child(3)").click()`))
 	pollUntil(l, `document.querySelector("#list-pane") && !document.querySelector("#glossary-pane")`)
 }

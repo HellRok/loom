@@ -1,18 +1,21 @@
 {{define "nav"}}<nav class="nav" id="nav" aria-label="Project navigation" data-live hx-get="/{{.Slug}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
-  <h2>Projects</h2>
-  <ul class="switcher">
-    {{range .Switcher}}<li{{if .Active}} class="active" aria-current="page"{{end}}><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a> <span class="count">{{.Open}}</span></li>{{end}}
-  </ul>
-  <h2>Views</h2>
-  <ul class="views">
-    {{range .Views}}<li{{if .Active}} class="active" aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}}</a> <span class="count">{{.Count}}</span></li>{{end}}
-  </ul>
-  {{if .Standalone}}<h2>Reference</h2>
-  <ul class="reference">
-    <li{{if .GlossaryActive}} class="active" aria-current="page"{{end}}><a href="/{{.Slug}}/glossary" hx-get="/{{.Slug}}/glossary" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">Glossary</a></li>
-  </ul>
-  {{end}}  <h2>Labels</h2>
-  <ul class="labels">
-    {{range .LabelLinks}}<li{{if or .Active .Zero}} class="{{if .Active}}active{{end}}{{if and .Active .Zero}} {{end}}{{if .Zero}}zero{{end}}"{{end}}{{if .Active}} aria-current="true"{{end}}><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="label label-{{.Colour}}">{{.Name}}</span></a> <span class="count">{{.Count}}</span></li>{{end}}
-  </ul>
+  <div class="panel">
+  <p class="nav-heading panel-heading">Projects</p>
+  <div class="switcher">
+    {{range .Switcher}}<a class="panel-block nav-link{{if .Active}} is-active{{end}}"{{if .Active}} aria-current="page"{{end}} href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}} <span class="count tag is-rounded">{{.Open}}</span></a>{{end}}
+  </div>
+  </div>
+  <div class="panel">
+  <p class="nav-heading panel-heading">Views</p>
+  <div class="views">
+    {{range .Views}}<a class="panel-block nav-link{{if .Active}} is-active{{end}}"{{if .Active}} aria-current="true"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Name}} <span class="count tag is-rounded">{{.Count}}</span></a>{{end}}
+    {{if .Standalone}}<a class="panel-block nav-link reference{{if .GlossaryActive}} is-active{{end}}"{{if .GlossaryActive}} aria-current="page"{{end}} href="/{{.Slug}}/glossary" hx-get="/{{.Slug}}/glossary" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">Glossary</a>{{end}}
+  </div>
+  </div>
+  <div class="panel">
+  <p class="nav-heading panel-heading">Labels</p>
+  <div class="labels">
+    {{range .LabelLinks}}<a class="panel-block nav-link{{if .Active}} is-active{{end}}{{if .Zero}} is-zero{{end}}"{{if .Active}} aria-current="true"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="tag label-chip label-{{.Colour}}">{{.Name}}</span> <span class="count tag is-rounded">{{.Count}}</span></a>{{end}}
+  </div>
+  </div>
 </nav>{{end}}

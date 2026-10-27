@@ -146,7 +146,7 @@ func TestLiveSessionsAndGlossaryMarkup(t *testing.T) {
 			if rec.Code != 200 {
 				t.Fatalf("status %d", rec.Code)
 			}
-			expect(t, doc, "header.top", 1)
+			expect(t, doc, "nav.top", 1)
 			if got := doc.Find("[sse-connect]").AttrOr("sse-connect", ""); got != tc.stream {
 				t.Errorf("connects to %q, want %q", got, tc.stream)
 			}

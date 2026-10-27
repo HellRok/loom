@@ -98,7 +98,7 @@ func TestPanesScrollIndependently(t *testing.T) {
 		fmt.Sprintf(`document.querySelector("#row-%d")`, issues+1),
 		`document.querySelector("#issue-pane .comment")`,
 		// The Open view's count in the sidebar, so the nav's morph has landed too.
-		fmt.Sprintf(`document.querySelector("#nav .views li.active .count")?.textContent === "%d"`, issues+1),
+		fmt.Sprintf(`document.querySelector("#nav .views .nav-link.is-active .count")?.textContent === "%d"`, issues+1),
 	} {
 		pollUntil(l, landed)
 	}
@@ -122,7 +122,7 @@ func TestNavigationKeepsItsScrollWhenFollowingLinks(t *testing.T) {
 	}
 
 	// A label link far down the sidebar.
-	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .labels li:last-child a").click()`))
+	Get(l, chromedp.Evaluate[any](`document.querySelector("#nav .labels .nav-link:last-child").click()`))
 	pollUntil(l, `location.search.includes("label=")`)
 	if got := scrollPosition(l, "#nav"); got != scrolled {
 		t.Errorf("#nav after following a label link: scrolled to %v, want %v", got, scrolled)
@@ -161,7 +161,7 @@ func TestSelectingARowKeepsTheListAndNavigationScroll(t *testing.T) {
 	// A row out of view at the top of the list (it sorts oldest first), followed
 	// without scrolling it into view.
 	Get(l, chromedp.Evaluate[any](`document.querySelector("#row-5 .row-link").click()`))
-	pollUntil(l, `document.querySelector("#row-5.selected")`)
+	pollUntil(l, `document.querySelector("#row-5.is-selected")`)
 	waitForHtmxIdle(l)
 	if got := Get(l, chromedp.Evaluate[float64](`document.querySelectorAll("#list-pane").length`)); got != 1 {
 		t.Errorf("%v list panes after selecting a row, want 1", got)

@@ -1,16 +1,17 @@
 {{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/events">{{template "home-pane" .}}</div>{{end}}
 
-{{define "home-pane"}}<section class="home" id="home-pane" data-live hx-get="/" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
-<h1>Projects</h1>
+{{define "home-pane"}}<section class="home section" id="home-pane" data-live hx-get="/" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+<div class="container is-max-desktop">
+<h1 class="title">Projects</h1>
 {{range .Projects}}{{$slug := .Slug}}
-<article class="project" id="project-{{.Slug}}">
-  <h2><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a></h2>
-  <p class="meta"><span class="root">{{.Root}}</span> · <span class="open">{{.Open}} open</span> · <span class="activity">last activity <time datetime="{{iso .LastActivity}}">{{ago .LastActivity}}</time></span></p>
+<article class="project box" id="project-{{.Slug}}">
+  <h2 class="title is-5"><a href="/{{.Slug}}" hx-get="/{{.Slug}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">{{.Slug}}</a></h2>
+  <p class="meta subtitle is-6"><span class="root">{{.Root}}</span> · <span class="open">{{.Open}} open</span> · <span class="activity">last activity <time datetime="{{iso .LastActivity}}">{{ago .LastActivity}}</time></span></p>
   {{range .Maps}}
   <div class="map">
     <p class="map-title"><a href="/{{$slug}}/issues/{{.Number}}" hx-get="/{{$slug}}/issues/{{.Number}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">#{{.Number}} {{.Title}}</a></p>
-    <p class="progress"><progress max="{{.Total}}" value="{{.Closed}}">{{.Percent}}%</progress> <span>{{.Closed}}/{{.Total}} done</span></p>
-    {{if .Next}}<p class="next">next:
+    <div class="map-progress"><progress class="progress is-small is-primary" max="{{.Total}}" value="{{.Closed}}">{{.Percent}}%</progress> <span class="is-size-7">{{.Closed}}/{{.Total}} done</span></div>
+    {{if .Next}}<p class="next is-size-7">next:
       {{range .Next}}<a href="/{{$slug}}/issues/{{.Number}}" hx-get="/{{$slug}}/issues/{{.Number}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true">#{{.Number}} {{.Title}}</a>{{end}}
     </p>{{end}}
   </div>
@@ -19,4 +20,5 @@
 {{else}}
 <p class="empty">No Projects yet. Run <code>loom init</code> in a codebase to add one.</p>
 {{end}}
+</div>
 </section>{{end}}

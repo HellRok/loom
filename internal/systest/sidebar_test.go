@@ -12,8 +12,8 @@ import (
 // labelCount is a JavaScript expression for the count shown beside label in
 // the sidebar.
 func labelCount(label string) string {
-	return fmt.Sprintf(`[...document.querySelectorAll("#nav .labels li")]
-		.find(li => li.querySelector(".label").textContent === %q)
+	return fmt.Sprintf(`[...document.querySelectorAll("#nav .labels .nav-link")]
+		.find(a => a.querySelector(".label-chip").textContent === %q)
 		?.querySelector(".count").textContent`, label)
 }
 
@@ -38,7 +38,7 @@ func TestSidebarLabelCountsUpdateLive(t *testing.T) {
 // viewCount is a JavaScript expression for the count beside the nth (1-based)
 // View in the sidebar.
 func viewCount(n int) string {
-	return fmt.Sprintf(`document.querySelector("#nav .views li:nth-child(%d) .count")?.textContent`, n)
+	return fmt.Sprintf(`document.querySelector("#nav .views .nav-link:nth-child(%d) .count")?.textContent`, n)
 }
 
 func TestSelectedLabelNarrowsTheViewCountsAndSurvivesSwitchingView(t *testing.T) {
@@ -60,8 +60,8 @@ func TestSelectedLabelNarrowsTheViewCountsAndSurvivesSwitchingView(t *testing.T)
 
 	// Selecting the label narrows the View counts and leaves its own alone.
 	poll(eq(labelCount("bug"), "2"))
-	Get(l, chromedp.Evaluate[any](`[...document.querySelectorAll("#nav .labels li a")]
-		.find(a => a.textContent.trim() === "bug").click()`))
+	Get(l, chromedp.Evaluate[any](`[...document.querySelectorAll("#nav .labels .nav-link")]
+		.find(a => a.querySelector(".label-chip").textContent === "bug").click()`))
 	poll(`location.search.includes("label=bug")`)
 	poll(eq(viewCount(open), "2"))
 	poll(eq(labelCount("bug"), "2"))
@@ -73,9 +73,9 @@ func TestSelectedLabelNarrowsTheViewCountsAndSurvivesSwitchingView(t *testing.T)
 	poll(eq(labelCount("bug"), "1"))
 
 	// Following a View keeps the label selected.
-	Get(l, chromedp.Evaluate[any](fmt.Sprintf(`document.querySelector("#nav .views li:nth-child(%d) a").click()`, closed)))
+	Get(l, chromedp.Evaluate[any](fmt.Sprintf(`document.querySelector("#nav .views .nav-link:nth-child(%d)").click()`, closed)))
 	poll(`location.search.includes("view=closed") && location.search.includes("label=bug")`)
-	poll(`document.querySelector("#nav .labels li.active") && document.querySelector("#row-1")`)
+	poll(`document.querySelector("#nav .labels .nav-link.is-active") && document.querySelector("#row-1")`)
 	poll(eq(labelCount("bug"), "1"))
 	poll(eq(viewCount(open), "1"))
 	poll(eq(viewCount(closed), "1"))

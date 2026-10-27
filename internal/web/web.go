@@ -170,6 +170,7 @@ func loadPages(s *server) map[string]*template.Template {
 		"colData":      func(key, name string, cards []card) column { return column{key, name, cards} },
 		"shortSession": shortSession,
 		"iso":          func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
+		"initial":      initial,
 	}
 	base := template.Must(template.New("base").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	pages := map[string]*template.Template{}
@@ -177,6 +178,14 @@ func loadPages(s *server) map[string]*template.Template {
 		pages[name] = template.Must(template.Must(base.Clone()).ParseFS(templateFS, "templates/"+name+".html", "templates/tabs.html", "templates/nav.html"))
 	}
 	return pages
+}
+
+// initial is the first letter of name, for a comment's avatar.
+func initial(name string) string {
+	for _, r := range name {
+		return string(r)
+	}
+	return "?"
 }
 
 func (s *server) ago(t time.Time) string {

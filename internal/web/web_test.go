@@ -106,6 +106,11 @@ func (f *fixture) get(path, target string) (*httptest.ResponseRecorder, *goquery
 	return rec, doc
 }
 
+// linkName is a nav link's text without its count.
+func linkName(s *goquery.Selection) string {
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(s.Text()), s.Find(".count").Text()))
+}
+
 func text(doc *goquery.Document, sel string) string {
 	return strings.Join(strings.Fields(doc.Find(sel).Text()), " ")
 }
@@ -127,6 +132,12 @@ func TestHome(t *testing.T) {
 		}
 		expect(t, doc, "html head title", 1)
 		expect(t, doc, "script[src='/static/htmx-2.0.4.min.js']", 1)
+		// Bulma loads first so loom.css can build on it.
+		var sheets []string
+		doc.Find("head link[rel=stylesheet]").Each(func(_ int, s *goquery.Selection) { sheets = append(sheets, s.AttrOr("href", "")) })
+		if got := strings.Join(sheets, " "); got != "/static/bulma-1.0.4.min.css /static/loom.css" {
+			t.Errorf("stylesheets = %s", got)
+		}
 		expect(t, doc, "main#main article.project", 2)
 		p := doc.Find("#project-loom")
 		if got := strings.Join(strings.Fields(p.Find(".meta").Text()), " "); !strings.Contains(got, "/code/loom") || !strings.Contains(got, "3 open") || !strings.Contains(got, "last activity") {
@@ -138,7 +149,10 @@ func TestHome(t *testing.T) {
 		if got := p.Find(".map-title").Text(); !strings.Contains(got, "#1 Ship v1") {
 			t.Errorf("map title = %q", got)
 		}
-		if got := p.Find("progress").AttrOr("value", ""); got != "1" {
+		if got := text(doc, "#project-loom .map-progress span"); got != "1/2 done" {
+			t.Errorf("map progress = %q", got)
+		}
+		if got := p.Find(".map-progress > progress").AttrOr("value", ""); got != "1" {
 			t.Errorf("progress value = %q", got)
 		}
 		if got := p.Find("progress").AttrOr("max", ""); got != "2" {
@@ -178,18 +192,18 @@ func TestProjectPage(t *testing.T) {
 			t.Errorf("empty issue pane = %q", got)
 		}
 		// Switcher with open counts.
-		expect(t, doc, ".switcher li", 2)
-		if got := text(doc, ".switcher li.active"); got != "loom 3" {
+		expect(t, doc, ".switcher .nav-link", 2)
+		if got := text(doc, ".switcher .nav-link.is-active"); got != "loom 3" {
 			t.Errorf("active switcher item = %q", got)
 		}
 		// Saved views.
 		var names []string
-		doc.Find(".views li a").Each(func(_ int, s *goquery.Selection) { names = append(names, s.Text()) })
+		doc.Find(".views .nav-link").Each(func(_ int, s *goquery.Selection) { names = append(names, linkName(s)) })
 		if got := strings.Join(names, ","); got != "Maps,Frontier,Open,In progress,Blocked,Needs triage,Closed" {
 			t.Errorf("views = %s", got)
 		}
 		// Labels with counts.
-		if got := text(doc, ".labels li:has(.label-yellow:contains('needs-triage'))"); got != "needs-triage 0" {
+		if got := text(doc, ".labels .nav-link:has(.label-yellow:contains('needs-triage'))"); got != "needs-triage 0" {
 			t.Errorf("needs-triage label = %q", got)
 		}
 		// Maps is the default view.
@@ -205,13 +219,13 @@ func TestProjectPage(t *testing.T) {
 		if got := text(doc, "#row-2 .row-parent"); got != "parent: #1" {
 			t.Errorf("row parent = %q", got)
 		}
-		if got := text(doc, "#row-2 .title"); got != "Write the web UI" {
+		if got := text(doc, "#row-2 .issue-title"); got != "Write the web UI" {
 			t.Errorf("row title = %q", got)
 		}
 		if !r2.HasClass("status-blocked") {
 			t.Errorf("#2 should be blocked: %v", r2.AttrOr("class", ""))
 		}
-		expect(t, doc, "#row-2 .label", 2)
+		expect(t, doc, "#row-2 .label-chip", 2)
 		expect(t, doc, "#row-2 time.updated", 1)
 		expect(t, doc, "form.filter input[name=q]", 1)
 	})
@@ -231,8 +245,11 @@ func TestProjectPage(t *testing.T) {
 		_, doc := f.get("/loom?view=open&label=bug", "")
 		expect(t, doc, ".rows .row", 1)
 		expect(t, doc, "#row-3", 1)
-		if got := doc.Find(".labels li.active").Length(); got != 1 {
+		if got := doc.Find(".labels .nav-link.is-active").Length(); got != 1 {
 			t.Errorf("active labels = %d", got)
+		}
+		if got := text(doc, ".active-filters .chip"); got != "bug" {
+			t.Errorf("filter chips = %q", got)
 		}
 		_, doc = f.get("/loom?view=open&q=WEB", "")
 		expect(t, doc, ".rows .row", 1)
@@ -270,16 +287,16 @@ func TestSavedViews(t *testing.T) {
 	t.Run("list, order and default", func(t *testing.T) {
 		_, doc := seed(t).get("/loom", "")
 		var hrefs []string
-		doc.Find(".views li a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
+		doc.Find(".views .nav-link").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
 		want := "/loom /loom?view=frontier /loom?view=open /loom?view=in-progress /loom?view=blocked /loom?view=needs-triage /loom?view=closed"
 		if got := strings.Join(hrefs, " "); got != want {
 			t.Errorf("view links = %s, want %s", got, want)
 		}
-		if got := text(doc, ".views li.active"); !strings.HasPrefix(got, "Maps") {
+		if got := text(doc, ".views .nav-link.is-active"); !strings.HasPrefix(got, "Maps") {
 			t.Errorf("default view = %q, want Maps", got)
 		}
 		_, doc = seed(t).get("/loom?view=bogus", "")
-		if got := text(doc, ".views li.active"); !strings.HasPrefix(got, "Maps") {
+		if got := text(doc, ".views .nav-link.is-active"); !strings.HasPrefix(got, "Maps") {
 			t.Errorf("unknown view fell back to %q, want Maps", got)
 		}
 	})
@@ -299,7 +316,7 @@ func TestSavedViews(t *testing.T) {
 			if got := rowNumbers(doc); got != c.rows {
 				t.Errorf("view %s lists %q, want %q", c.view, got, c.rows)
 			}
-			if got, want := text(doc, ".views li.active .count"), len(strings.Fields(c.rows)); got != strconv.Itoa(want) {
+			if got, want := text(doc, ".views .nav-link.is-active .count"), len(strings.Fields(c.rows)); got != strconv.Itoa(want) {
 				t.Errorf("view %s count = %q, want %d", c.view, got, want)
 			}
 		}
@@ -353,12 +370,15 @@ func TestIssueOverview(t *testing.T) {
 
 	check := func(t *testing.T, doc *goquery.Document) {
 		t.Helper()
-		if got := text(doc, "#issue-pane h1"); got != "#2 Write the web UI" {
+		if got := text(doc, "#issue-pane h1"); got != "Write the web UI" {
 			t.Errorf("heading = %q", got)
 		}
-		expect(t, doc, "#issue-pane .tabs li.active", 1)
+		if got := text(doc, "#issue-pane .issue-header .num"); got != "#2" {
+			t.Errorf("number = %q", got)
+		}
+		expect(t, doc, "#issue-pane .issue-tabs li.is-active", 1)
 		props := map[string]string{
-			".state":        "open · blocked",
+			".state":        "open blocked",
 			".assignee":     "unassigned",
 			".issue-labels": "needs-triage wayfinder:task",
 			".parent":       "#1 Ship v1",
@@ -368,15 +388,18 @@ func TestIssueOverview(t *testing.T) {
 			".version":      "1",
 		}
 		for sel, want := range props {
-			if got := text(doc, "#issue-pane dd"+sel); got != want {
-				t.Errorf("dd%s = %q, want %q", sel, got, want)
+			if got := text(doc, "#issue-pane .props td"+sel); got != want {
+				t.Errorf("td%s = %q, want %q", sel, got, want)
 			}
 		}
 		expect(t, doc, ".blockers a.ref", 2)
-		expect(t, doc, ".blockers a.ref.closed s", 1)
-		if got := text(doc, ".blockers a.closed s"); got != "#4 Old thing" {
+		expect(t, doc, ".blockers a.ref.is-closed s", 1)
+		if got := text(doc, ".blockers a.is-closed s"); got != "#4 Old thing" {
 			t.Errorf("struck blocker = %q", got)
 		}
+		// The body comes before the props, so it leads when they stack.
+		expect(t, doc, "#issue-pane .issue-overview > :first-child .body", 1)
+		expect(t, doc, "#issue-pane .issue-overview > .props", 1)
 		if got := text(doc, ".body strong"); got != "bold" {
 			t.Errorf("rendered body bold = %q", got)
 		}
@@ -387,6 +410,9 @@ func TestIssueOverview(t *testing.T) {
 		}
 		if got := c.Find(".byline strong").Text(); got != "Tess Ter" {
 			t.Errorf("comment author = %q", got)
+		}
+		if got := c.Find(".avatar").Text(); got != "T" {
+			t.Errorf("comment avatar = %q", got)
 		}
 		if got := c.Find(".byline a").AttrOr("href", ""); got != "#comment-2" {
 			t.Errorf("comment anchor = %q", got)
@@ -403,7 +429,7 @@ func TestIssueOverview(t *testing.T) {
 		}
 		expect(t, doc, "head title", 1)
 		expect(t, doc, "nav.nav", 1)
-		expect(t, doc, "#list-pane #row-2.selected", 1)
+		expect(t, doc, "#list-pane #row-2.is-selected", 1)
 		if got := text(doc, "title"); !strings.Contains(got, "#2 Write the web UI") {
 			t.Errorf("title = %q", got)
 		}
@@ -435,10 +461,11 @@ func TestIssueOverview(t *testing.T) {
 
 	t.Run("map with children", func(t *testing.T) {
 		_, doc := f.get("/loom/issues/1?tab=overview", "issue-pane")
-		if got := text(doc, "dd.state"); got != "open (Map) · open" {
+		if got := text(doc, "#issue-pane .state"); got != "open Map open" {
 			t.Errorf("state = %q", got)
 		}
-		if got := text(doc, "dd.children"); got != "#2 Write the web UI #4 Old thing" {
+		// One child per line.
+		if got := doc.Find("#issue-pane .children > div").Map(func(_ int, s *goquery.Selection) string { return s.Text() }); strings.Join(got, ",") != "#2 Write the web UI,#4 Old thing" {
 			t.Errorf("children = %q", got)
 		}
 		if got := doc.Find(".body a").AttrOr("href", ""); got != "/loom/issues/2" {
@@ -448,7 +475,7 @@ func TestIssueOverview(t *testing.T) {
 
 	t.Run("closed issue", func(t *testing.T) {
 		_, doc := f.get("/loom/issues/4", "issue-pane")
-		if got := text(doc, "dd.state"); got != "closed · closed" {
+		if got := text(doc, "#issue-pane .state"); got != "closed closed" {
 			t.Errorf("state = %q", got)
 		}
 	})
@@ -489,7 +516,7 @@ func TestWithoutGraph(t *testing.T) {
 
 func TestStatic(t *testing.T) {
 	f := seed(t)
-	for _, path := range []string{"/static/loom.css", "/static/loom.js", "/static/htmx-2.0.4.min.js", "/static/htmx-ext-sse-2.2.3.js", "/static/idiomorph-ext-0.3.0.min.js"} {
+	for _, path := range []string{"/static/bulma-1.0.4.min.css", "/static/loom.css", "/static/loom.js", "/static/htmx-2.0.4.min.js", "/static/htmx-ext-sse-2.2.3.js", "/static/idiomorph-ext-0.3.0.min.js"} {
 		rec, _ := f.get(path, "")
 		if rec.Code != 200 || rec.Body.Len() == 0 {
 			t.Errorf("%s: status %d, %d bytes", path, rec.Code, rec.Body.Len())
@@ -565,14 +592,14 @@ func TestFrontierView(t *testing.T) {
 		expect(t, doc, ".rows .row", 3)
 		// Its rows are laid out like the list's: a title line, then the reason.
 		expect(t, doc, ".not-ready #row-7 > .row-title > a.row-link", 1)
-		expect(t, doc, ".not-ready #row-7.selected", 0)
+		expect(t, doc, ".not-ready #row-7.is-selected", 0)
 	})
 
 	t.Run("the selected not-ready row carries the highlight on its row", func(t *testing.T) {
 		_, doc := f.get("/loom/issues/7?view=frontier", "")
-		expect(t, doc, "#list-pane .not-ready #row-7.selected", 1)
-		expect(t, doc, "#list-pane .not-ready #row-8.selected", 0)
-		expect(t, doc, "#list-pane .selected", 1)
+		expect(t, doc, "#list-pane .not-ready #row-7.is-selected", 1)
+		expect(t, doc, "#list-pane .not-ready #row-8.is-selected", 0)
+		expect(t, doc, "#list-pane .row.is-selected", 1)
 	})
 
 	t.Run("group is hidden when empty", func(t *testing.T) {
@@ -585,10 +612,10 @@ func TestFrontierView(t *testing.T) {
 // none marked with a trailing "!".
 func labelCounts(doc *goquery.Document) map[string]string {
 	out := map[string]string{}
-	doc.Find(".labels li").Each(func(_ int, s *goquery.Selection) {
-		name := strings.TrimSpace(s.Find(".label").Text())
+	doc.Find(".labels .nav-link").Each(func(_ int, s *goquery.Selection) {
+		name := strings.TrimSpace(s.Find(".label-chip").Text())
 		n := strings.TrimSpace(s.Find(".count").Text())
-		if s.HasClass("zero") {
+		if s.HasClass("is-zero") {
 			n += "!"
 		}
 		out[name] = n
@@ -696,19 +723,19 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 
 	t.Run("issue pane", func(t *testing.T) {
 		_, doc := f.get("/loom/issues/1", "")
-		if got := text(doc, "#issue-pane dd.open-children"); got != "waiting on 1 open child" {
+		if got := text(doc, "#issue-pane .open-children"); got != "waiting on 1 open child" {
 			t.Errorf("open children = %q", got)
 		}
-		if got := text(doc, "#issue-pane dd.blockers"); got != "none" {
+		if got := text(doc, "#issue-pane .blockers"); got != "none" {
 			t.Errorf("explicit blockers = %q, want none", got)
 		}
-		if got := text(doc, "#issue-pane dd.state"); got != "open · blocked" {
+		if got := text(doc, "#issue-pane .state"); got != "open blocked" {
 			t.Errorf("state = %q", got)
 		}
 		_, doc = f.get("/loom/issues/3", "")
-		expect(t, doc, "#issue-pane dd.open-children", 0)
+		expect(t, doc, "#issue-pane .open-children", 0)
 		_, doc = f.get("/loom/issues/2", "")
-		expect(t, doc, "#issue-pane dd.open-children", 0)
+		expect(t, doc, "#issue-pane .open-children", 0)
 	})
 
 	t.Run("blocked view stays explicit edges only", func(t *testing.T) {
@@ -760,7 +787,7 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 		}
 		expect(t, doc, ".not-ready", 0)
 		_, doc = f.get("/loom/issues/1", "")
-		expect(t, doc, "#issue-pane dd.open-children", 0)
+		expect(t, doc, "#issue-pane .open-children", 0)
 		expect(t, doc, "#row-1 .row-waiting", 0)
 	})
 }
@@ -768,7 +795,7 @@ func TestIssueWithOpenChildrenShowsAsWaiting(t *testing.T) {
 // viewLinks are the sidebar's View links, in order.
 func viewLinks(doc *goquery.Document) string {
 	var hrefs []string
-	doc.Find("#nav .views li a").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
+	doc.Find("#nav .views .nav-link").Each(func(_ int, s *goquery.Selection) { hrefs = append(hrefs, s.AttrOr("href", "")) })
 	return strings.Join(hrefs, " ")
 }
 
@@ -790,7 +817,7 @@ func TestSidebarViewLinksKeepTheFilters(t *testing.T) {
 // viewCounts are the sidebar's View counts, in order.
 func viewCounts(doc *goquery.Document) string {
 	var ns []string
-	doc.Find("#nav .views li .count").Each(func(_ int, s *goquery.Selection) { ns = append(ns, s.Text()) })
+	doc.Find("#nav .views .nav-link .count").Each(func(_ int, s *goquery.Selection) { ns = append(ns, s.Text()) })
 	return strings.Join(ns, " ")
 }
 

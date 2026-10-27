@@ -1,16 +1,22 @@
 {{define "main"}}<div class="live" hx-ext="sse,morph" sse-connect="/events">{{template "session-pane" .}}</div>{{end}}
 
-{{define "session-pane"}}<section class="session" id="session-pane" data-live hx-get="{{.Holder.URL}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
-<h1>Session <span title="{{.Session.ID}}">{{.Holder.Short}}</span></h1>
-<p class="meta"><code class="full-id">{{.Session.ID}}</code> · <span class="idle">{{.Holder.Idle}}</span> · last seen <time datetime="{{iso .Session.LastSeen}}">{{ago .Session.LastSeen}}</time> · first seen <time datetime="{{iso .Session.FirstSeen}}">{{time .Session.FirstSeen}}</time></p>
-<h2>Holds</h2>
+{{define "session-pane"}}<section class="session section" id="session-pane" data-live hx-get="{{.Holder.URL}}" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
+<div class="container is-max-desktop">
+<h1 class="title">Session <span title="{{.Session.ID}}">{{.Holder.Short}}</span></h1>
+<p class="meta subtitle is-6"><code class="full-id">{{.Session.ID}}</code> · <span class="idle">{{.Holder.Idle}}</span> · last seen <time datetime="{{iso .Session.LastSeen}}">{{ago .Session.LastSeen}}</time> · first seen <time datetime="{{iso .Session.FirstSeen}}">{{time .Session.FirstSeen}}</time></p>
+<div class="panel">
+<p class="panel-heading">Holds</p>
 <ul class="held">
-  {{range .Held}}<li><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></li>
-  {{else}}<li class="empty">Holds no Issues.</li>{{end}}
+  {{range .Held}}<li class="panel-block"><a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></li>
+  {{else}}<li class="empty panel-block">Holds no Issues.</li>{{end}}
 </ul>
-<h2>Events</h2>
+</div>
+<div class="panel">
+<p class="panel-heading">Events</p>
 <ul class="events">
-  {{range .Events}}<li><time datetime="{{iso .At}}">{{time .At}}</time> <span class="type">{{.Type}}</span> <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></li>
-  {{else}}<li class="empty">No Events.</li>{{end}}
+  {{range .Events}}<li class="panel-block"><span><time datetime="{{iso .At}}">{{time .At}}</time> <span class="type">{{.Type}}</span> <a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="slug">{{.Slug}}</span>#{{.Number}} {{.Title}}</a></span></li>
+  {{else}}<li class="empty panel-block">No Events.</li>{{end}}
 </ul>
+</div>
+</div>
 </section>{{end}}

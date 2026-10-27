@@ -4,6 +4,6 @@
 </div>{{end}}
 
 {{define "glossary-pane"}}<section class="glossary" id="glossary-pane" data-live hx-get="/{{.Slug}}/glossary" hx-trigger="sse:changed, htmx:sseOpen from:body" hx-target="this" hx-swap="morph:outerHTML">
-<h1>Glossary</h1>
-{{if .Empty}}<p class="empty">No Glossary yet.</p>{{else}}<div class="body">{{.Body}}</div>{{end}}
+<h1 class="title is-4">Glossary</h1>
+{{if .Empty}}<p class="empty">No Glossary yet.</p>{{else}}<div class="body content">{{.Body}}</div>{{end}}
 </section>{{end}}
