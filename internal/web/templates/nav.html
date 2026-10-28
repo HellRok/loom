@@ -15,7 +15,7 @@
   <div class="panel">
   <p class="nav-heading panel-heading">Labels</p>
   <div class="labels">
-    {{range .LabelLinks}}<a class="panel-block nav-link{{if .Active}} is-active{{end}}{{if .Zero}} is-zero{{end}}"{{if .Active}} aria-current="true"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="tag label-chip label-{{.Colour}}">{{.Name}}</span> <span class="count tag is-rounded">{{.Count}}</span></a>{{end}}
+    {{range .LabelLinks}}<a class="panel-block nav-link{{if .Active}} is-active{{end}}"{{if .Active}} aria-current="true"{{end}} href="{{.URL}}" hx-get="{{.URL}}" hx-target="#main" hx-swap="innerHTML" hx-push-url="true"><span class="tag label-chip label-{{.Colour}}">{{.Name}}</span> <span class="count tag is-rounded">{{.Count}}</span></a>{{end}}
   </div>
   </div>
 </nav>{{end}}

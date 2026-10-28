@@ -30,7 +30,6 @@
 .nav-heading { font-size: 0.8rem; padding: 0.5em 0.9em; }
 .nav-link { justify-content: space-between; }
 .nav-link.is-active { font-weight: 600; }
-.nav-link.is-zero { opacity: 0.5; }
 
 .list-heading { display: flex; justify-content: space-between; align-items: center; }
 .filter-field { width: 100%; }

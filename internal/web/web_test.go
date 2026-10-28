@@ -608,17 +608,12 @@ func TestFrontierView(t *testing.T) {
 	})
 }
 
-// labelCounts is the sidebar's label counts by name, those muted as having
-// none marked with a trailing "!".
+// labelCounts is the sidebar's label counts by name.
 func labelCounts(doc *goquery.Document) map[string]string {
 	out := map[string]string{}
 	doc.Find(".labels .nav-link").Each(func(_ int, s *goquery.Selection) {
 		name := strings.TrimSpace(s.Find(".label-chip").Text())
-		n := strings.TrimSpace(s.Find(".count").Text())
-		if s.HasClass("is-zero") {
-			n += "!"
-		}
-		out[name] = n
+		out[name] = strings.TrimSpace(s.Find(".count").Text())
 	})
 	return out
 }
@@ -633,24 +628,24 @@ func TestSidebarLabelCountsFollowTheView(t *testing.T) {
 		want        map[string]string
 	}{
 		{"Frontier", "view=frontier", map[string]string{
-			"ready-for-agent": "1", "ready-for-human": "1", "bug": "1", "needs-triage": "0!", "wayfinder:task": "0!"}},
+			"ready-for-agent": "1", "ready-for-human": "1", "bug": "1", "needs-triage": "0", "wayfinder:task": "0"}},
 		{"Frontier narrowed by an active label", "view=frontier&label=ready-for-agent", map[string]string{
 			// Selecting a label doesn't change its own count: 1, as unselected above.
-			"ready-for-agent": "1", "ready-for-human": "0!", "bug": "1", "needs-triage": "0!"}},
+			"ready-for-agent": "1", "ready-for-human": "0", "bug": "1", "needs-triage": "0"}},
 		{"Open narrowed by a label, which keeps its count", "view=open&label=bug", map[string]string{
-			"bug": "1", "ready-for-agent": "1", "ready-for-human": "0!", "needs-triage": "0!"}},
+			"bug": "1", "ready-for-agent": "1", "ready-for-human": "0", "needs-triage": "0"}},
 		{"Open narrowed by two labels", "view=open&label=bug&label=ready-for-agent", map[string]string{
-			"bug": "1", "ready-for-agent": "1", "ready-for-human": "0!", "needs-triage": "0!"}},
+			"bug": "1", "ready-for-agent": "1", "ready-for-human": "0", "needs-triage": "0"}},
 		{"Open narrowed by labels no Issue carries together", "view=open&label=bug&label=needs-triage", map[string]string{
-			"bug": "0", "needs-triage": "0", "ready-for-agent": "0!"}},
+			"bug": "0", "needs-triage": "0", "ready-for-agent": "0"}},
 		{"Maps narrowed by a label none of them carry", "view=maps&label=bug", map[string]string{
-			"bug": "0", "ready-for-agent": "0!"}},
+			"bug": "0", "ready-for-agent": "0"}},
 		{"Closed", "view=closed", map[string]string{
-			"bug": "1", "ready-for-agent": "0!", "needs-triage": "0!"}},
+			"bug": "1", "ready-for-agent": "0", "needs-triage": "0"}},
 		{"Open", "view=open", map[string]string{
 			"ready-for-agent": "3", "ready-for-human": "1", "bug": "1", "needs-triage": "1"}},
 		{"Open narrowed by a title filter", "view=open&q=held", map[string]string{
-			"ready-for-agent": "1", "ready-for-human": "0!", "bug": "0!"}},
+			"ready-for-agent": "1", "ready-for-human": "0", "bug": "0"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, doc := f.get("/loom?"+c.query, "")

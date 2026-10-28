@@ -440,7 +440,6 @@ type labelLink struct {
 	Count  int
 	URL    string
 	Active bool
-	Zero   bool
 }
 
 // labelLinks is the sidebar's Labels. Each Count is the number of rows the
@@ -457,7 +456,7 @@ func labelLinks(slug string, f filters, labels []store.Label, rows []row) []labe
 	var ll []labelLink
 	for _, l := range labels {
 		n, active := counts[l.Name], f.hasLabel(l.Name)
-		ll = append(ll, labelLink{Label: l, Count: n, Zero: n == 0 && !active, URL: "/" + slug + f.withLabel(l.Name).query(), Active: active})
+		ll = append(ll, labelLink{Label: l, Count: n, URL: "/" + slug + f.withLabel(l.Name).query(), Active: active})
 	}
 	return ll
 }
